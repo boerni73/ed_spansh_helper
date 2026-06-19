@@ -3,7 +3,7 @@
 #                                                                        #
 # AUTHOR            Bernard Härri / Chat AI                              #
 #                                                                        #
-# COMPILE: pyinstaller --noconsole --onefile ed_spansh_gui.py            #
+# COMPILE: pyinstaller --noconsole --onefile ed_spansh_helper.py         #
 #                                                                        #
 ##########################################################################
 
