@@ -247,8 +247,21 @@ class EdSpanshApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill="both", expand=True)
 
-        # ── CONTROL BUTTONS (ganz oben) ────────────────────────────────
-        self.btn_frame = tk.Frame(self.main_frame)
+        # ── Horizontaler Split: links Controls | rechts Log ────────────
+        self.content_frame = tk.Frame(self.main_frame)
+        self.content_frame.pack(fill="both", expand=True)
+        self.content_frame.columnconfigure(0, weight=3)
+        self.content_frame.columnconfigure(1, weight=1)
+        self.content_frame.rowconfigure(0, weight=1)
+
+        self.left_frame = tk.Frame(self.content_frame)
+        self.left_frame.grid(row=0, column=0, sticky="nsew")
+
+        self.right_frame = tk.Frame(self.content_frame)
+        self.right_frame.grid(row=0, column=1, sticky="nsew")
+
+        # ── CONTROL BUTTONS (ganz oben, links) ────────────────────────
+        self.btn_frame = tk.Frame(self.left_frame)
         self.btn_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         self.start_btn = tk.Button(
@@ -298,9 +311,9 @@ class EdSpanshApp:
         )
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
 
-        # ── Spansh tools / ship builds ─────────────────────────────────
+        # ── Spansh tools / ship builds (links) ────────────────────────
         self.ship_build_frame = tk.LabelFrame(
-            self.main_frame,
+            self.left_frame,
             text=" Spansh Tools ",
             font=("Arial", 10, "bold"),
             padx=10,
@@ -360,9 +373,10 @@ class EdSpanshApp:
             padx=10
         )
         self.copy_ship_build_btn.pack(side="left")
-        # ── Route overview ─────────────────────────────────────────────
+
+        # ── Route overview (links) ─────────────────────────────────────
         self.route_info_frame = tk.LabelFrame(
-            self.main_frame,
+            self.left_frame,
             text=" Route Overview ",
             font=("Arial", 10, "bold"),
             padx=10,
@@ -457,10 +471,9 @@ class EdSpanshApp:
 
         self.route_table_item_ids = []
         self.route_table_row_data = []
-
-        # ── Cockpit navigation preview ──────────────────────────────────
+        # ── Cockpit navigation preview (links) ────────────────────────
         self.dash_frame = tk.LabelFrame(
-            self.main_frame,
+            self.left_frame,
             text=" Cockpit Navigation Display ",
             font=("Arial", 10, "bold"),
             padx=10,
@@ -479,16 +492,16 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
-        # ── Log output ─────────────────────────────────────────────────
+        # ── Log output (rechts) ────────────────────────────────────────
         self.output_label = tk.Label(
-            self.main_frame,
+            self.right_frame,
             text="Log Output and Status:",
             font=("Arial", 10, "bold"),
         )
         self.output_label.pack(anchor="w", padx=10, pady=(10, 2))
 
         self.log_output = scrolledtext.ScrolledText(
-            self.main_frame,
+            self.right_frame,
             font=("Consolas", 10),
             wrap="word",
             relief="flat",
@@ -497,6 +510,7 @@ class EdSpanshApp:
         self.log_output.pack(fill="both", expand=True, padx=10, pady=(5, 10))
 
         self.refresh_ship_build_dropdown()
+
     def open_add_ship_build_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Ship Build")
@@ -683,6 +697,11 @@ class EdSpanshApp:
         self.main_frame.config(bg=t["bg"])
         self.file_frame.config(bg=t["bg"])
         self.btn_frame.config(bg=t["bg"])
+
+        # ── Neue Frames einfärben ──────────────────────────────────────
+        self.content_frame.config(bg=t["bg"])
+        self.left_frame.config(bg=t["bg"])
+        self.right_frame.config(bg=t["bg"])
 
         self.input_label.config(bg=t["bg"], fg=t["label_fg"])
         self.output_label.config(bg=t["bg"], fg=t["label_fg"])
