@@ -1,0 +1,12 @@
+{
+    "Elite Dangerous Odyssey": {
+        "path2dll": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-odyssey-64/Openvr/win64/openvr_api.dll",
+        "SteamVR": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-odyssey-64/Openvr/win64/openvr_api.dll.steamvr",
+        "OpenXR": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-odyssey-64/Openvr/win64/openvr_api.dll.openxr"
+    },
+    "Elite Dangerous Horizon": {
+        "path2dll": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-64/Openvr/win64/openvr_api.dll",
+        "SteamVR": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-64/Openvr/win64/openvr_api.dll.steamvr",
+        "OpenXR": "E:/games/EliteDangerous/EDLaunch/Products/elite-dangerous-64/Openvr/win64/openvr_api.dll.openxr"
+    }
+}
