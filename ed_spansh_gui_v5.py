@@ -13,6 +13,8 @@ import time
 import glob
 import threading
 import locale
+import hashlib
+import shutil
 import math
 import webbrowser
 import tkinter as tk
@@ -48,8 +50,9 @@ DEFAULT_ED_ODYSSEY_PATH = (
     r"\Products\elite-dangerous-odyssey-assets"
 )
 
-OPENVR_DLL        = "openvr_api.dll"
-OPENVR_DLL_BACKUP = "openvr_api.dll.bak_steamvr"
+OPENVR_DLL         = "openvr_api.dll"
+OPENVR_DLL_STEAMVR = "openvr_api.dll.steamvr"
+OPENVR_DLL_OPENXR  = "openvr_api.dll.openxr"
 
 
 # ----------------------------------------------------------------------
@@ -115,6 +118,7 @@ class EdSpanshApp:
             self.ship_builds_raw,
             self.ed_horizons_path,
             self.ed_odyssey_path,
+            self.openxr_dll_source,
         ) = self.load_settings()
 
         self.ship_builds = []
@@ -163,6 +167,7 @@ class EdSpanshApp:
         ship_builds        = []
         ed_horizons_path   = DEFAULT_ED_HORIZONS_PATH
         ed_odyssey_path    = DEFAULT_ED_ODYSSEY_PATH
+        openxr_dll_source  = ""
 
         if os.path.exists(SETTINGS_FILE):
             try:
@@ -175,6 +180,7 @@ class EdSpanshApp:
                     kneeboard_img_file = s.get("kneeboard_output_img_file", DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE)
                     ed_horizons_path   = s.get("ed_horizons_path",          DEFAULT_ED_HORIZONS_PATH)
                     ed_odyssey_path    = s.get("ed_odyssey_path",           DEFAULT_ED_ODYSSEY_PATH)
+                    openxr_dll_source  = s.get("openxr_dll_source",         "")
             except Exception:
                 pass
 
@@ -182,7 +188,7 @@ class EdSpanshApp:
             theme = "ed_orange"
 
         return (theme, journal_dir, route_file, kneeboard_img_file,
-                ship_builds, ed_horizons_path, ed_odyssey_path)
+                ship_builds, ed_horizons_path, ed_odyssey_path, openxr_dll_source)
 
     def save_settings(self):
         try:
@@ -199,6 +205,7 @@ class EdSpanshApp:
                         "ship_builds":               self.ship_builds_raw,
                         "ed_horizons_path":          self.ed_horizons_path,
                         "ed_odyssey_path":           self.ed_odyssey_path,
+                        "openxr_dll_source":         self.openxr_dll_source,
                     },
                     f,
                     indent=2,
@@ -1227,8 +1234,8 @@ class EdSpanshApp:
     def open_settings_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Settings")
-        dialog.geometry("650x380")
-        dialog.minsize(580, 340)
+        dialog.geometry("680x580")
+        dialog.minsize(600, 520)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.config(bg="#000000")
@@ -1337,6 +1344,7 @@ class EdSpanshApp:
             relief="flat", bd=2, padx=10, pady=3,
             font=("Arial", 9, "bold"),
         ).grid(row=3, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
+
         # ══════════════════════════════════════════════════════════════
         # Tab 2: VR Mode
         # ══════════════════════════════════════════════════════════════
@@ -1345,20 +1353,73 @@ class EdSpanshApp:
         tab_vr.columnconfigure(0, weight=1)
         tab_vr.columnconfigure(1, weight=0)
 
-        status_labels = {}
+        # ── OpenXR DLL Source (global, gilt für beide Spiele) ──────────
+        tk.Label(
+            tab_vr,
+            text="OpenXR DLL Source  (vom Benutzer heruntergeladen):",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(12, 2))
+
+        openxr_source_var = tk.StringVar(value=self.openxr_dll_source)
+
+        tk.Entry(
+            tab_vr,
+            textvariable=openxr_source_var,
+            bg="#1a1a1a", fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9), relief="flat", bd=4,
+        ).grid(row=1, column=0, sticky="ew", padx=(12, 4), pady=(0, 4), ipady=4)
+
+        def browse_openxr_source():
+            selected = filedialog.askopenfilename(
+                initialdir=(os.path.dirname(openxr_source_var.get())
+                            if openxr_source_var.get() else os.path.expanduser("~")),
+                title="Select OpenXR DLL",
+                filetypes=[("DLL Files", "*.dll"), ("All Files", "*.*")],
+            )
+            if selected:
+                openxr_source_var.set(os.path.normpath(selected))
+
+        tk.Button(
+            tab_vr, text="Browse...", command=browse_openxr_source,
+            bg="#000000", fg="#ff7300",
+            activebackground="#1a1a1a", activeforeground="#ffaa44",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
+        ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=(0, 4))
+
+        # Trennlinie
+        tk.Frame(tab_vr, bg="#ff7300", height=1).grid(
+            row=2, column=0, columnspan=2, sticky="ew", padx=12, pady=(4, 0)
+        )
+
+        # ── Hilfsfunktion: Sektion pro Spiel ──────────────────────────
+        status_labels  = {}
+        setup_buttons  = {}
 
         def make_game_section(parent, row_offset, label_text, path_var, status_var):
+
+            def refresh_status(pv=path_var, sv=status_var):
+                mode = self.vr_detect_mode(pv.get())
+                sv.set(self.vr_mode_label(mode))
+                status_labels[id(sv)].config(fg=self.vr_mode_color(mode))
+                if mode in ("needs_setup", "game_updated"):
+                    setup_buttons[id(sv)].pack(side="left", padx=(0, 10))
+                else:
+                    setup_buttons[id(sv)].pack_forget()
+
+            # Spiel-Titel
             tk.Label(
-                parent,
-                text=label_text,
+                parent, text=label_text,
                 bg="#000000", fg="#ff7300",
                 font=("Arial", 10, "bold"), anchor="w",
             ).grid(row=row_offset, column=0, columnspan=2, sticky="w",
-                   padx=12, pady=(14, 2))
+                   padx=12, pady=(10, 2))
 
+            # Pfad-Entry
             tk.Entry(
-                parent,
-                textvariable=path_var,
+                parent, textvariable=path_var,
                 bg="#1a1a1a", fg="#ff7300",
                 insertbackground="#ff7300",
                 font=("Consolas", 9), relief="flat", bd=4,
@@ -1373,9 +1434,7 @@ class EdSpanshApp:
                 )
                 if selected:
                     pv.set(os.path.normpath(selected))
-                    mode = self.vr_detect_mode(pv.get())
-                    sv.set(self.vr_mode_label(mode))
-                    status_labels[id(sv)].config(fg=self.vr_mode_color(mode))
+                    refresh_status(pv, sv)
 
             tk.Button(
                 parent, text="Browse...", command=browse_game,
@@ -1386,37 +1445,62 @@ class EdSpanshApp:
             ).grid(row=row_offset + 1, column=1, sticky="ew",
                    padx=(0, 12), pady=(0, 4))
 
+            # Status-Label
             mode = self.vr_detect_mode(path_var.get())
             status_var.set(self.vr_mode_label(mode))
             lbl = tk.Label(
-                parent,
-                textvariable=status_var,
-                bg="#000000",
-                fg=self.vr_mode_color(mode),
+                parent, textvariable=status_var,
+                bg="#000000", fg=self.vr_mode_color(mode),
                 font=("Consolas", 10, "bold"), anchor="w",
             )
             lbl.grid(row=row_offset + 2, column=0, columnspan=2,
-                     sticky="w", padx=16, pady=(0, 4))
+                     sticky="w", padx=16, pady=(0, 2))
             status_labels[id(status_var)] = lbl
 
-            btn_row = tk.Frame(parent, bg="#000000")
-            btn_row.grid(row=row_offset + 3, column=0, columnspan=2,
-                         sticky="w", padx=12, pady=(0, 8))
+            # Action-Buttons Zeile
+            action_row = tk.Frame(parent, bg="#000000")
+            action_row.grid(row=row_offset + 3, column=0, columnspan=2,
+                            sticky="w", padx=12, pady=(0, 6))
+
+            def do_setup(pv=path_var, sv=status_var):
+                ok, msg = self.vr_do_setup(pv.get(), openxr_source_var.get())
+                self.log(msg)
+                refresh_status(pv, sv)
+                if ok:
+                    messagebox.showinfo("VR Setup", msg, parent=dialog)
+                else:
+                    messagebox.showerror("VR Setup Fehler", msg, parent=dialog)
 
             def apply_mode(target, pv=path_var, sv=status_var):
                 ok, msg = self.vr_switch(pv.get(), target)
                 self.log(msg)
-                mode = self.vr_detect_mode(pv.get())
-                sv.set(self.vr_mode_label(mode))
-                status_labels[id(sv)].config(fg=self.vr_mode_color(mode))
+                refresh_status(pv, sv)
                 if ok:
                     messagebox.showinfo("VR Mode", msg, parent=dialog)
                 else:
                     messagebox.showerror("VR Mode Fehler", msg, parent=dialog)
 
+            # Setup-Button (nur sichtbar wenn needs_setup / game_updated)
+            setup_btn = tk.Button(
+                action_row, text="⚙ Setup / Re-Setup",
+                command=do_setup,
+                bg="#ff7300", fg="#000000",
+                activebackground="#cc5c00", activeforeground="#000000",
+                relief="flat", bd=2, padx=10, pady=3,
+                font=("Arial", 9, "bold"),
+            )
+            setup_btn.pack(side="left", padx=(0, 10))
+            setup_buttons[id(status_var)] = setup_btn
+
+            # Initiale Sichtbarkeit Setup-Button
+            if mode in ("needs_setup", "game_updated"):
+                setup_btn.pack(side="left", padx=(0, 10))
+            else:
+                setup_btn.pack_forget()
+
             tk.Button(
-                btn_row, text="→ OpenVR (SteamVR)",
-                command=lambda: apply_mode("openvr"),
+                action_row, text="→ SteamVR / OpenVR",
+                command=lambda: apply_mode("steamvr"),
                 bg="#000000", fg="#ffd700",
                 activebackground="#1a1a1a", activeforeground="#ffe566",
                 relief="flat", bd=2, padx=10, pady=3,
@@ -1424,7 +1508,7 @@ class EdSpanshApp:
             ).pack(side="left", padx=(0, 6))
 
             tk.Button(
-                btn_row, text="→ OpenXR",
+                action_row, text="→ OpenXR",
                 command=lambda: apply_mode("openxr"),
                 bg="#000000", fg="#00d26a",
                 activebackground="#1a1a1a", activeforeground="#33ff88",
@@ -1432,19 +1516,20 @@ class EdSpanshApp:
                 font=("Arial", 9, "bold"),
             ).pack(side="left")
 
+        # ── Sektionen für beide Spiele ─────────────────────────────────
         horizons_path_var   = tk.StringVar(value=self.ed_horizons_path)
         horizons_status_var = tk.StringVar()
         odyssey_path_var    = tk.StringVar(value=self.ed_odyssey_path)
         odyssey_status_var  = tk.StringVar()
 
-        make_game_section(tab_vr, 0, "Elite Dangerous Horizons:",
+        make_game_section(tab_vr, 3,  "Elite Dangerous Horizons:",
                           horizons_path_var, horizons_status_var)
 
-        tk.Frame(tab_vr, bg="#ff7300", height=1).grid(
-            row=4, column=0, columnspan=2, sticky="ew", padx=12, pady=2
+        tk.Frame(tab_vr, bg="#333333", height=1).grid(
+            row=7, column=0, columnspan=2, sticky="ew", padx=12, pady=2
         )
 
-        make_game_section(tab_vr, 5, "Elite Dangerous Odyssey:",
+        make_game_section(tab_vr, 8,  "Elite Dangerous Odyssey:",
                           odyssey_path_var, odyssey_status_var)
 
         # ══════════════════════════════════════════════════════════════
@@ -1458,6 +1543,8 @@ class EdSpanshApp:
             self.kneeboard_output_img_file = kneeboard_var.get().strip()
             self.ed_horizons_path          = horizons_path_var.get().strip()
             self.ed_odyssey_path           = odyssey_path_var.get().strip()
+            self.openxr_dll_source = openxr_source_var.get().strip()
+
             self.save_settings()
             self.log("Settings gespeichert.")
             self.log(f"  Journal Dir  : {self.journal_dir}")
@@ -1483,62 +1570,140 @@ class EdSpanshApp:
             relief="flat", bd=2, padx=14, pady=4,
             font=("Arial", 10, "bold"),
         ).pack(side="right")
+
     # ------------------------------------------------------------------
     # VR Mode helpers
     # ------------------------------------------------------------------
+    def vr_md5(self, file_path):
+        """MD5-Hash einer Datei, None bei Fehler."""
+        try:
+            h = hashlib.md5()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except Exception:
+            return None
+
     def vr_detect_mode(self, game_path):
+        """
+        Erkennt den aktiven VR-Modus anhand MD5-Vergleich.
+        Rückgabe:
+          'steamvr'      – aktive dll == .steamvr Backup
+          'openxr'       – aktive dll == .openxr Backup
+          'needs_setup'  – kein Backup vorhanden (erster Start)
+          'game_updated' – dll stimmt mit keinem Backup überein (Spiel aktualisiert)
+          'unknown'      – Pfad ungültig oder dll fehlt
+        """
         if not game_path or not os.path.isdir(game_path):
-            return "unknown"
-        dll = os.path.join(game_path, OPENVR_DLL)
-        bak = os.path.join(game_path, OPENVR_DLL_BACKUP)
-        if os.path.exists(dll):
-            return "openvr"
-        elif os.path.exists(bak):
-            return "openxr"
-        else:
             return "unknown"
 
-    def vr_switch(self, game_path, target_mode):
+        dll     = os.path.join(game_path, OPENVR_DLL)
+        steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
+        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+
+        if not os.path.exists(dll):
+            return "unknown"
+
+        has_steamvr = os.path.exists(steamvr)
+        has_openxr  = os.path.exists(openxr)
+
+        if not has_steamvr and not has_openxr:
+            return "needs_setup"
+
+        dll_md5 = self.vr_md5(dll)
+
+        if has_steamvr and dll_md5 == self.vr_md5(steamvr):
+            return "steamvr"
+        if has_openxr and dll_md5 == self.vr_md5(openxr):
+            return "openxr"
+
+        return "game_updated"
+
+    def vr_do_setup(self, game_path, openxr_source):
+        """
+        Erstmalig-Setup oder Re-Setup nach Game-Update:
+          1. openvr_api.dll  →  openvr_api.dll.steamvr  (Backup)
+          2. openxr_source   →  openvr_api.dll.openxr   (OpenXR-Kopie)
+        Gibt (success: bool, message: str) zurück.
+        """
         if not game_path or not os.path.isdir(game_path):
-            return False, f"Pfad nicht gefunden: {game_path}"
-        dll = os.path.join(game_path, OPENVR_DLL)
-        bak = os.path.join(game_path, OPENVR_DLL_BACKUP)
+            return False, f"Spielpfad nicht gefunden: {game_path}"
+
+        dll     = os.path.join(game_path, OPENVR_DLL)
+        steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
+        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+
+        if not os.path.exists(dll):
+            return False, f"{OPENVR_DLL} nicht gefunden in:\n{game_path}"
+
+        if not openxr_source or not os.path.exists(openxr_source):
+            return False, ("OpenXR DLL Quelle nicht gefunden.\n"
+                           "Bitte den Pfad unter 'OpenXR DLL Source' angeben.")
+
         try:
-            if target_mode == "openxr":
-                if os.path.exists(dll):
-                    os.rename(dll, bak)
-                    return True, f"Umgestellt auf OpenXR: {OPENVR_DLL} → {OPENVR_DLL_BACKUP}"
-                elif os.path.exists(bak):
-                    return True, "Bereits im OpenXR-Modus."
-                else:
-                    return False, f"{OPENVR_DLL} nicht gefunden – falscher Pfad?"
-            elif target_mode == "openvr":
-                if os.path.exists(bak):
-                    os.rename(bak, dll)
-                    return True, f"Umgestellt auf OpenVR: {OPENVR_DLL_BACKUP} → {OPENVR_DLL}"
-                elif os.path.exists(dll):
-                    return True, "Bereits im OpenVR-Modus."
-                else:
-                    return False, f"{OPENVR_DLL_BACKUP} nicht gefunden – war nie umgestellt?"
-            else:
-                return False, f"Unbekannter Modus: {target_mode}"
+            shutil.copy2(dll, steamvr)
+            shutil.copy2(openxr_source, openxr)
+            return True, (f"Setup erfolgreich:\n"
+                          f"  {OPENVR_DLL_STEAMVR}  erstellt\n"
+                          f"  {OPENVR_DLL_OPENXR}   kopiert")
         except PermissionError:
             return False, "Zugriff verweigert – bitte als Administrator ausführen."
         except Exception as e:
-            return False, f"Fehler beim Umbenennen: {e}"
+            return False, f"Fehler beim Setup: {e}"
+
+    def vr_switch(self, game_path, target_mode):
+        """
+        Wechselt den VR-Modus:
+          Kopiert .steamvr oder .openxr Backup → openvr_api.dll
+        Gibt (success: bool, message: str) zurück.
+        """
+        if not game_path or not os.path.isdir(game_path):
+            return False, f"Spielpfad nicht gefunden: {game_path}"
+
+        dll     = os.path.join(game_path, OPENVR_DLL)
+        steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
+        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+
+        try:
+            if target_mode == "steamvr":
+                if not os.path.exists(steamvr):
+                    return False, (f"{OPENVR_DLL_STEAMVR} nicht gefunden –\n"
+                                   f"bitte zuerst Setup ausführen.")
+                shutil.copy2(steamvr, dll)
+                return True, "Erfolgreich auf SteamVR / OpenVR umgestellt."
+
+            elif target_mode == "openxr":
+                if not os.path.exists(openxr):
+                    return False, (f"{OPENVR_DLL_OPENXR} nicht gefunden –\n"
+                                   f"bitte zuerst Setup ausführen.")
+                shutil.copy2(openxr, dll)
+                return True, "Erfolgreich auf OpenXR umgestellt."
+
+            else:
+                return False, f"Unbekannter Modus: {target_mode}"
+
+        except PermissionError:
+            return False, "Zugriff verweigert – bitte als Administrator ausführen."
+        except Exception as e:
+            return False, f"Fehler beim Kopieren: {e}"
 
     def vr_mode_label(self, mode):
         return {
-            "openvr":  "● OpenVR  (SteamVR)",
-            "openxr":  "● OpenXR",
-            "unknown": "● Unbekannt / Pfad nicht gefunden",
+            "steamvr":      "● SteamVR / OpenVR  (aktiv)",
+            "openxr":       "● OpenXR  (aktiv)",
+            "needs_setup":  "⚠  Setup erforderlich  (erster Start)",
+            "game_updated": "⚠  Spiel aktualisiert – Setup erneut ausführen",
+            "unknown":      "●  Unbekannt / Pfad nicht gefunden",
         }.get(mode, "● ?")
 
     def vr_mode_color(self, mode):
         return {
-            "openvr":  "#ffd700",
-            "openxr":  "#00d26a",
-            "unknown": "#808080",
+            "steamvr":      "#ffd700",
+            "openxr":       "#00d26a",
+            "needs_setup":  "#ff7300",
+            "game_updated": "#ff3b30",
+            "unknown":      "#808080",
         }.get(mode, "#808080")
 
     # ------------------------------------------------------------------
