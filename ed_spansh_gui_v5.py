@@ -35,6 +35,15 @@ DEFAULT_JOURNAL_DIR = os.path.expanduser(r"~/Saved Games/Frontier Developments/E
 SETTINGS_FILE = os.path.join(os.path.expanduser("~"), "ed_spansh_settings.json")
 DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE = os.path.join(os.path.expanduser("~"), "vr_navigation.png")
 
+# ----------------------------------------------------------------------
+# Button color constants
+# ----------------------------------------------------------------------
+BTN_BG          = "#000000"
+BTN_BG_ACTIVE   = "#1a1a1a"
+BTN_FG_START    = "#00d26a"   # green
+BTN_FG_PAUSE    = "#ffd700"   # yellow
+BTN_FG_STOP     = "#ff3b30"   # red
+BTN_FG_DISABLED = "#3a3a3a"   # grey (for visual hint on disabled)
 
 # ----------------------------------------------------------------------
 # Theme definitions
@@ -159,7 +168,6 @@ class EdSpanshApp:
 
         return theme, journal_dir, route_file, kneeboard_img_file, ship_builds
 
-
     def save_settings(self):
         try:
             settings_dir = os.path.dirname(SETTINGS_FILE)
@@ -239,27 +247,58 @@ class EdSpanshApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill="both", expand=True)
 
-#        # Journal path
-#        self.path_frame = tk.Frame(self.main_frame)
-#        self.path_frame.pack(fill="x", padx=10, pady=(10, 0))
-#
-#        self.path_label_title = tk.Label(
-#            self.path_frame,
-#            text="Journal Path:",
-#            font=("Arial", 9, "bold"),
-#        )
-#        self.path_label_title.pack(side="left")
-#
-#        self.path_label_value = tk.Label(
-#            self.path_frame,
-#            text=self.journal_dir,
-#            font=("Consolas", 9),
-#            anchor="w",
-#        )
-#        self.path_label_value.pack(side="left", fill="x", expand=True, padx=5)
-#
+        # ── CONTROL BUTTONS (ganz oben) ────────────────────────────────
+        self.btn_frame = tk.Frame(self.main_frame)
+        self.btn_frame.pack(fill="x", padx=10, pady=(10, 5))
 
-        # Spansh tools / ship builds
+        self.start_btn = tk.Button(
+            self.btn_frame,
+            text="▶",
+            command=self.start_monitoring,
+            bg=BTN_BG,
+            fg=BTN_FG_START,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_START,
+            font=("Arial", 18, "bold"),
+            pady=5,
+            relief="raised",
+            bd=3,
+        )
+        self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
+
+        self.pause_btn = tk.Button(
+            self.btn_frame,
+            text="⏸",
+            command=self.toggle_pause,
+            bg=BTN_BG,
+            fg=BTN_FG_PAUSE,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_PAUSE,
+            font=("Arial", 18, "bold"),
+            pady=5,
+            state="disabled",
+            relief="raised",
+            bd=3,
+        )
+        self.pause_btn.pack(side="left", fill="x", expand=True, padx=2)
+
+        self.stop_btn = tk.Button(
+            self.btn_frame,
+            text="⏹",
+            command=self.stop_monitoring,
+            bg=BTN_BG,
+            fg=BTN_FG_STOP,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_STOP,
+            font=("Arial", 18, "bold"),
+            pady=5,
+            state="disabled",
+            relief="raised",
+            bd=3,
+        )
+        self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
+
+        # ── Spansh tools / ship builds ─────────────────────────────────
         self.ship_build_frame = tk.LabelFrame(
             self.main_frame,
             text=" Spansh Tools ",
@@ -321,8 +360,7 @@ class EdSpanshApp:
             padx=10
         )
         self.copy_ship_build_btn.pack(side="left")
-
-        # Route overview
+        # ── Route overview ─────────────────────────────────────────────
         self.route_info_frame = tk.LabelFrame(
             self.main_frame,
             text=" Route Overview ",
@@ -332,7 +370,6 @@ class EdSpanshApp:
         )
         self.route_info_frame.pack(fill="both", expand=False, padx=10, pady=5)
 
-        # Route file selection
         self.input_label = tk.Label(
             self.route_info_frame,
             text="Select Spansh Route JSON File (or drop it here):",
@@ -362,8 +399,6 @@ class EdSpanshApp:
         )
         self.browse_btn.pack(side="right", padx=(5, 0))
 
-
-
         self.lbl_route_type = tk.Label(
             self.route_info_frame,
             text="Route Type: UNKNOWN",
@@ -383,19 +418,19 @@ class EdSpanshApp:
             style="Route.Treeview",
         )
 
-        self.route_table.heading("wp_no", text="#")
-        self.route_table.heading("system", text="System Name")
-        self.route_table.heading("distance", text="Distance")
+        self.route_table.heading("wp_no",     text="#")
+        self.route_table.heading("system",    text="System Name")
+        self.route_table.heading("distance",  text="Distance")
         self.route_table.heading("scoopable", text="Scoopable")
-        self.route_table.heading("neutron", text="Neutron Star")
-        self.route_table.heading("jumps_to", text="Jumps to Reach")
+        self.route_table.heading("neutron",   text="Neutron Star")
+        self.route_table.heading("jumps_to",  text="Jumps to Reach")
 
-        self.route_table.column("wp_no", width=60, minwidth=50, anchor="center")
-        self.route_table.column("system", width=350, minwidth=200, anchor="w")
-        self.route_table.column("distance", width=100, minwidth=80, anchor="e")
-        self.route_table.column("scoopable", width=90, minwidth=80, anchor="center")
-        self.route_table.column("neutron", width=100, minwidth=90, anchor="center")
-        self.route_table.column("jumps_to", width=110, minwidth=90, anchor="center")
+        self.route_table.column("wp_no",     width=60,  minwidth=50,  anchor="center")
+        self.route_table.column("system",    width=350, minwidth=200, anchor="w")
+        self.route_table.column("distance",  width=100, minwidth=80,  anchor="e")
+        self.route_table.column("scoopable", width=90,  minwidth=80,  anchor="center")
+        self.route_table.column("neutron",   width=100, minwidth=90,  anchor="center")
+        self.route_table.column("jumps_to",  width=110, minwidth=90,  anchor="center")
 
         self.route_table_scroll_y = tk.Scrollbar(
             self.route_table_frame,
@@ -423,7 +458,7 @@ class EdSpanshApp:
         self.route_table_item_ids = []
         self.route_table_row_data = []
 
-        # Cockpit navigation preview
+        # ── Cockpit navigation preview ──────────────────────────────────
         self.dash_frame = tk.LabelFrame(
             self.main_frame,
             text=" Cockpit Navigation Display ",
@@ -444,43 +479,7 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
-        # Control buttons
-        self.btn_frame = tk.Frame(self.main_frame)
-        self.btn_frame.pack(fill="x", padx=10, pady=5)
-
-        self.start_btn = tk.Button(
-            self.btn_frame,
-            text="Load File & Start Monitor",
-            command=self.start_monitoring,
-            fg="white",
-            font=("Arial", 10, "bold"),
-            pady=5,
-        )
-        self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
-
-        self.pause_btn = tk.Button(
-            self.btn_frame,
-            text="Pause",
-            command=self.toggle_pause,
-            fg="white",
-            font=("Arial", 10, "bold"),
-            pady=5,
-            state="disabled",
-        )
-        self.pause_btn.pack(side="left", fill="x", expand=True, padx=2)
-
-        self.stop_btn = tk.Button(
-            self.btn_frame,
-            text="Stop",
-            command=self.stop_monitoring,
-            fg="white",
-            font=("Arial", 10, "bold"),
-            pady=5,
-            state="disabled",
-        )
-        self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
-
-        # Log output
+        # ── Log output ─────────────────────────────────────────────────
         self.output_label = tk.Label(
             self.main_frame,
             text="Log Output and Status:",
@@ -498,7 +497,6 @@ class EdSpanshApp:
         self.log_output.pack(fill="both", expand=True, padx=10, pady=(5, 10))
 
         self.refresh_ship_build_dropdown()
-
     def open_add_ship_build_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Ship Build")
@@ -678,22 +676,18 @@ class EdSpanshApp:
             background=[("active", t["btn_start_bg"])],
             foreground=[("active", "#ffffff")],
         )
-
     def apply_theme(self, theme_name):
         t = THEMES[theme_name]
 
         self.root.config(bg=t["bg"])
         self.main_frame.config(bg=t["bg"])
-        # self.path_frame.config(bg=t["bg"])
         self.file_frame.config(bg=t["bg"])
         self.btn_frame.config(bg=t["bg"])
 
-        # self.path_label_title.config(bg=t["bg"], fg=t["label_fg"])
-        # self.path_label_value.config(bg=t["bg"], fg=t["value_fg"])
         self.input_label.config(bg=t["bg"], fg=t["label_fg"])
         self.output_label.config(bg=t["bg"], fg=t["label_fg"])
 
-        # Spansh tools section
+        # ── Spansh tools section ────────────────────────────────────────
         self.ship_build_frame.config(
             bg=t["panel_bg"],
             fg=t["label_fg"],
@@ -739,7 +733,7 @@ class EdSpanshApp:
             bd=0
         )
 
-        # Route overview section
+        # ── Route overview section ──────────────────────────────────────
         self.route_info_frame.config(
             bg=t["panel_bg"],
             fg=t["label_fg"],
@@ -752,7 +746,7 @@ class EdSpanshApp:
         )
         self.route_table_frame.config(bg=t["panel_bg"])
 
-        # Cockpit preview section
+        # ── Cockpit preview section ─────────────────────────────────────
         self.dash_frame.config(
             bg=t["panel_bg"],
             fg=t["label_fg"],
@@ -771,7 +765,7 @@ class EdSpanshApp:
             fg=t["accent_fg"]
         )
 
-        # Inputs and log
+        # ── Inputs and log ──────────────────────────────────────────────
         self.file_entry.config(
             bg=t["input_bg"],
             fg=t["input_fg"],
@@ -788,7 +782,6 @@ class EdSpanshApp:
             bd=6
         )
 
-        # Main buttons
         self.browse_btn.config(
             bg=t["btn_start_bg"],
             fg=t["btn_fg"],
@@ -798,34 +791,33 @@ class EdSpanshApp:
             bd=0
         )
 
+        # ── Transport buttons (Schwarz / farbige Icons) ─────────────────
+        # Relief wird NICHT überschrieben – er zeigt den aktuellen Zustand
         self.start_btn.config(
-            bg=t["btn_start_bg"] if not self.monitoring_active else t["btn_disabled_bg"],
-            fg=t["btn_fg"],
-            activebackground=t["btn_pause_bg"],
-            activeforeground=t["btn_fg"],
-            relief="flat",
-            bd=0
+            bg=BTN_BG,
+            fg=BTN_FG_START,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_START,
+            bd=3,
         )
 
         self.pause_btn.config(
-            bg=t["btn_pause_bg"],
-            fg=t["btn_fg"],
-            activebackground=t["btn_start_bg"],
-            activeforeground=t["btn_fg"],
-            relief="flat",
-            bd=0
+            bg=BTN_BG,
+            fg=BTN_FG_PAUSE,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_PAUSE,
+            bd=3,
         )
 
         self.stop_btn.config(
-            bg=t["btn_stop_bg"],
-            fg=t["btn_fg"],
-            activebackground="#aa3a00",
-            activeforeground=t["btn_fg"],
-            relief="flat",
-            bd=0
+            bg=BTN_BG,
+            fg=BTN_FG_STOP,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_STOP,
+            bd=3,
         )
 
-        # Scrollbars
+        # ── Scrollbars ──────────────────────────────────────────────────
         try:
             self.route_table_scroll_y.config(
                 bg=t["panel_bg"],
@@ -844,11 +836,11 @@ class EdSpanshApp:
         except Exception:
             pass
 
-        # ttk styles
+        # ── ttk styles ──────────────────────────────────────────────────
         self.setup_table_style()
         self.setup_combobox_style()
 
-        # Route table highlight tags
+        # ── Route table highlight tags ──────────────────────────────────
         try:
             self.route_table.tag_configure(
                 "current_system",
@@ -863,7 +855,7 @@ class EdSpanshApp:
         except Exception:
             pass
 
-        # Native menu styling (best effort)
+        # ── Native menu styling (best effort) ───────────────────────────
         try:
             self.menu_bar.config(
                 bg=t["panel_bg"],
@@ -880,6 +872,18 @@ class EdSpanshApp:
         except Exception:
             pass
 
+    def _update_transport_btn_states(self):
+        """Setzt relief der drei Transport-Buttons passend zum aktuellen Zustand."""
+        # Start-Button: gedrückt wenn Monitoring läuft
+        self.start_btn.config(
+            relief="sunken" if self.monitoring_active else "raised"
+        )
+        # Pause-Button: gedrückt wenn pausiert
+        self.pause_btn.config(
+            relief="sunken" if self.is_paused else "raised"
+        )
+        # Stop-Button: immer raised (momentary action)
+        self.stop_btn.config(relief="raised")
     def refresh_dashboard_image(self):
         try:
             if not os.path.exists(self.kneeboard_output_img_file):
@@ -941,7 +945,6 @@ class EdSpanshApp:
         )
         if selected_dir:
             self.journal_dir = os.path.normpath(selected_dir)
-            self.path_label_value.config(text=self.journal_dir)
             self.save_settings()
             self.log(f"Journal directory updated to: {self.journal_dir}")
 
@@ -1000,16 +1003,16 @@ class EdSpanshApp:
         self.route_table_row_data = []
 
         for row in route_rows:
-            waypoint_no = row.get("waypoint_no", "")
-            system_name = row.get("system_name", "")
-            distance = row.get("distance", 0.0)
-            scoopable = row.get("scoopable", None)
-            neutron_star = row.get("neutron_star", False)
+            waypoint_no   = row.get("waypoint_no", "")
+            system_name   = row.get("system_name", "")
+            distance      = row.get("distance", 0.0)
+            scoopable     = row.get("scoopable", None)
+            neutron_star  = row.get("neutron_star", False)
             jumps_to_reach = row.get("jumps_to_reach", 0)
 
             scoopable_text = "-" if scoopable is None else ("Yes" if scoopable else "No")
-            neutron_text = "Yes" if neutron_star else "No"
-            distance_text = f"{distance:.1f} LY" if isinstance(distance, (int, float)) else str(distance)
+            neutron_text   = "Yes" if neutron_star else "No"
+            distance_text  = f"{distance:.1f} LY" if isinstance(distance, (int, float)) else str(distance)
 
             item_id = self.route_table.insert(
                 "",
@@ -1027,12 +1030,12 @@ class EdSpanshApp:
             self.route_table_item_ids.append(item_id)
             self.route_table_row_data.append(
                 {
-                    "item_id": item_id,
-                    "waypoint_no": waypoint_no,
-                    "system_name": str(system_name),
-                    "distance": distance,
-                    "scoopable": scoopable,
-                    "neutron_star": neutron_star,
+                    "item_id":       item_id,
+                    "waypoint_no":   waypoint_no,
+                    "system_name":   str(system_name),
+                    "distance":      distance,
+                    "scoopable":     scoopable,
+                    "neutron_star":  neutron_star,
                     "jumps_to_reach": jumps_to_reach,
                 }
             )
@@ -1055,7 +1058,7 @@ class EdSpanshApp:
         next_matches = []
 
         current_system_lc = str(current_system).strip().lower() if current_system else ""
-        next_waypoint_lc = str(next_waypoint).strip().lower() if next_waypoint else ""
+        next_waypoint_lc  = str(next_waypoint).strip().lower()  if next_waypoint  else ""
 
         for idx, row in enumerate(self.route_table_row_data):
             system_name_lc = row["system_name"].strip().lower()
@@ -1079,6 +1082,88 @@ class EdSpanshApp:
             self.route_table.selection_set(next_item_id)
             self.route_table.focus(next_item_id)
 
+    def setup_combobox_style(self):
+        t = THEMES[self.current_theme_name]
+        style = ttk.Style()
+
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure(
+            "Orange.TCombobox",
+            fieldbackground=t["input_bg"],
+            background=t["panel_bg"],
+            foreground=t["input_fg"],
+            arrowcolor=t["accent_fg"],
+            bordercolor=t["panel_border"],
+            lightcolor=t["panel_border"],
+            darkcolor=t["panel_border"]
+        )
+    def open_spansh_website(self):
+        try:
+            webbrowser.open("https://spansh.co.uk")
+            self.log("Opened https://spansh.co.uk in the default browser.")
+        except Exception as e:
+            messagebox.showerror("Browser Error", f"Could not open browser:\n{e}")
+
+    def extract_ship_name_from_build(self, raw_json_text):
+        try:
+            parsed = json.loads(raw_json_text)
+
+            if isinstance(parsed, list) and parsed:
+                first = parsed[0]
+                if isinstance(first, dict):
+                    ship_name = first.get("data", {}).get("ShipName")
+                    if ship_name:
+                        return str(ship_name)
+
+            if isinstance(parsed, dict):
+                ship_name = parsed.get("data", {}).get("ShipName")
+                if ship_name:
+                    return str(ship_name)
+
+        except Exception:
+            pass
+
+        return "Unnamed Build"
+
+    def rebuild_ship_build_index(self):
+        self.ship_builds = []
+
+        for raw in self.ship_builds_raw:
+            ship_name = self.extract_ship_name_from_build(raw)
+            self.ship_builds.append({
+                "name": ship_name,
+                "raw":  raw
+            })
+
+    def refresh_ship_build_dropdown(self):
+        self.rebuild_ship_build_index()
+
+        names = [entry["name"] for entry in self.ship_builds]
+        self.ship_build_dropdown["values"] = names
+
+        if names:
+            self.ship_build_var.set(names[0])
+        else:
+            self.ship_build_var.set("")
+
+    def copy_selected_ship_build(self):
+        selected_name = self.ship_build_var.get().strip()
+        if not selected_name:
+            messagebox.showwarning("No Selection", "Please select a ship build first.")
+            return
+
+        for entry in self.ship_builds:
+            if entry["name"] == selected_name:
+                if self.copy_to_clipboard(entry["raw"]):
+                    self.log(f"Copied ship build to clipboard: {selected_name}")
+                return
+
+        messagebox.showerror("Build Not Found", "The selected ship build could not be found.")
+
     # ------------------------------------------------------------------
     # Route parsing
     # ------------------------------------------------------------------
@@ -1096,11 +1181,12 @@ class EdSpanshApp:
 
                 route_rows.append(
                     {
-                        "waypoint_no": i + 1,
-                        "system_name": str(system_name),
-                        "distance": float(item.get("distance", 0.0) or 0.0),
-                        "scoopable": None if item.get("is_scoopable", None) is None else bool(item.get("is_scoopable")),
-                        "neutron_star": bool(item.get("has_neutron", False)),
+                        "waypoint_no":   i + 1,
+                        "system_name":   str(system_name),
+                        "distance":      float(item.get("distance", 0.0) or 0.0),
+                        "scoopable":     None if item.get("is_scoopable", None) is None
+                                         else bool(item.get("is_scoopable")),
+                        "neutron_star":  bool(item.get("has_neutron", False)),
                         "jumps_to_reach": i,
                     }
                 )
@@ -1116,16 +1202,16 @@ class EdSpanshApp:
                 if not system_name:
                     continue
 
-                jumps_this_leg = int(item.get("jumps", 0) or 0)
+                jumps_this_leg   = int(item.get("jumps", 0) or 0)
                 cumulative_jumps = 0 if i == 0 else cumulative_jumps + jumps_this_leg
 
                 route_rows.append(
                     {
-                        "waypoint_no": i + 1,
-                        "system_name": str(system_name),
-                        "distance": float(item.get("distance_jumped", 0.0) or 0.0),
-                        "scoopable": None,
-                        "neutron_star": bool(item.get("neutron_star", False)),
+                        "waypoint_no":    i + 1,
+                        "system_name":    str(system_name),
+                        "distance":       float(item.get("distance_jumped", 0.0) or 0.0),
+                        "scoopable":      None,
+                        "neutron_star":   bool(item.get("neutron_star", False)),
                         "jumps_to_reach": cumulative_jumps,
                     }
                 )
@@ -1152,16 +1238,16 @@ class EdSpanshApp:
                 if item.get("neutron_star") or item.get("star_type") == "N" or item.get("star_class") == "N":
                     neutron_star = True
 
-                jumps_this_leg = int(item.get("jumps", 1) or 1)
+                jumps_this_leg   = int(item.get("jumps", 1) or 1)
                 cumulative_jumps = 0 if i == 0 and distance == 0 else cumulative_jumps + jumps_this_leg
 
                 route_rows.append(
                     {
-                        "waypoint_no": i + 1,
-                        "system_name": str(system_name),
-                        "distance": distance,
-                        "scoopable": None if scoopable is None else bool(scoopable),
-                        "neutron_star": bool(neutron_star),
+                        "waypoint_no":    i + 1,
+                        "system_name":    str(system_name),
+                        "distance":       distance,
+                        "scoopable":      None if scoopable is None else bool(scoopable),
+                        "neutron_star":   bool(neutron_star),
                         "jumps_to_reach": cumulative_jumps,
                     }
                 )
@@ -1178,26 +1264,26 @@ class EdSpanshApp:
             with open(file_path, "r", encoding="utf-8") as f:
                 route_data = json.load(f)
 
-            raw_jumps = []
+            raw_jumps  = []
             route_type = "Unknown Spansh Route"
 
             if "result" in route_data and "jumps" in route_data["result"]:
-                raw_jumps = route_data["result"]["jumps"]
+                raw_jumps  = route_data["result"]["jumps"]
                 route_type = "Galaxy Plotter"
             elif "result" in route_data and "system_jumps" in route_data["result"]:
-                raw_jumps = route_data["result"]["system_jumps"]
+                raw_jumps  = route_data["result"]["system_jumps"]
                 route_type = "Neutron Plotter"
             elif "jumps" in route_data:
-                raw_jumps = route_data["jumps"]
+                raw_jumps  = route_data["jumps"]
                 route_type = "Standard Jump Route"
             elif "systems" in route_data:
-                raw_jumps = route_data["systems"]
+                raw_jumps  = route_data["systems"]
                 route_type = "Road to Riches / Exobiology"
             elif "result" in route_data and "systems" in route_data["result"]:
-                raw_jumps = route_data["result"]["systems"]
+                raw_jumps  = route_data["result"]["systems"]
                 route_type = "Road to Riches / Exobiology (API)"
             elif "route" in route_data:
-                raw_jumps = route_data["route"]
+                raw_jumps  = route_data["route"]
                 route_type = "Fleet Carrier Route"
             else:
                 raise ValueError("Unknown Spansh JSON structure. Could not find jumps or systems list.")
@@ -1225,20 +1311,20 @@ class EdSpanshApp:
 
                 parsed_route.append(
                     {
-                        "name": str(name),
+                        "name":        str(name),
                         "is_scoopable": None if is_scoopable is None else bool(is_scoopable),
                         "has_neutron": bool(has_neutron),
-                        "distance": float(distance or 0.0),
-                        "x": float(item.get("x", 0.0) or 0.0),
-                        "y": float(item.get("y", 0.0) or 0.0),
-                        "z": float(item.get("z", 0.0) or 0.0),
+                        "distance":    float(distance or 0.0),
+                        "x":           float(item.get("x", 0.0) or 0.0),
+                        "y":           float(item.get("y", 0.0) or 0.0),
+                        "z":           float(item.get("z", 0.0) or 0.0),
                     }
                 )
 
             if not parsed_route:
                 raise ValueError("No valid systems could be parsed from the file.")
 
-            self.my_route = parsed_route
+            self.my_route    = parsed_route
             self.route_index = 0
             self.last_route_file = file_path
 
@@ -1252,100 +1338,11 @@ class EdSpanshApp:
         self.log(f"Successfully loaded and standardized {route_type} with {len(self.my_route)} route entries.")
         self.save_settings()
         return True
-
-    def setup_combobox_style(self):
-        t = THEMES[self.current_theme_name]
-        style = ttk.Style()
-
-        try:
-            style.theme_use("clam")
-        except Exception:
-            pass
-
-        style.configure(
-            "Orange.TCombobox",
-            fieldbackground=t["input_bg"],
-            background=t["panel_bg"],
-            foreground=t["input_fg"],
-            arrowcolor=t["accent_fg"],
-            bordercolor=t["panel_border"],
-            lightcolor=t["panel_border"],
-            darkcolor=t["panel_border"]
-        )
-
-
-    def open_spansh_website(self):
-        try:
-            webbrowser.open("https://spansh.co.uk")
-            self.log("Opened https://spansh.co.uk in the default browser.")
-        except Exception as e:
-            messagebox.showerror("Browser Error", f"Could not open browser:\n{e}")
-
-
-    def extract_ship_name_from_build(self, raw_json_text):
-        try:
-            parsed = json.loads(raw_json_text)
-
-            if isinstance(parsed, list) and parsed:
-                first = parsed[0]
-                if isinstance(first, dict):
-                    ship_name = first.get("data", {}).get("ShipName")
-                    if ship_name:
-                        return str(ship_name)
-
-            if isinstance(parsed, dict):
-                ship_name = parsed.get("data", {}).get("ShipName")
-                if ship_name:
-                    return str(ship_name)
-
-        except Exception:
-            pass
-
-        return "Unnamed Build"
-
-
-    def rebuild_ship_build_index(self):
-        self.ship_builds = []
-
-        for raw in self.ship_builds_raw:
-            ship_name = self.extract_ship_name_from_build(raw)
-            self.ship_builds.append({
-                "name": ship_name,
-                "raw": raw
-            })
-
-
-    def refresh_ship_build_dropdown(self):
-        self.rebuild_ship_build_index()
-
-        names = [entry["name"] for entry in self.ship_builds]
-        self.ship_build_dropdown["values"] = names
-
-        if names:
-            self.ship_build_var.set(names[0])
-        else:
-            self.ship_build_var.set("")
-
-    def copy_selected_ship_build(self):
-        selected_name = self.ship_build_var.get().strip()
-        if not selected_name:
-            messagebox.showwarning("No Selection", "Please select a ship build first.")
-            return
-
-        for entry in self.ship_builds:
-            if entry["name"] == selected_name:
-                if self.copy_to_clipboard(entry["raw"]):
-                    self.log(f"Copied ship build to clipboard: {selected_name}")
-                return
-
-        messagebox.showerror("Build Not Found", "The selected ship build could not be found.")
-
-
     # ------------------------------------------------------------------
     # Route logic
     # ------------------------------------------------------------------
     def distance(self, destination_coord, current_coord):
-        dest_x, dest_y, dest_z = destination_coord
+        dest_x,    dest_y,    dest_z    = destination_coord
         current_x, current_y, current_z = current_coord
 
         dx = dest_x - current_x
@@ -1359,24 +1356,24 @@ class EdSpanshApp:
             return None
 
         current_index = -1
-        on_route = False
+        on_route      = False
 
         for i, jump in enumerate(self.my_route):
             if jump["name"].lower() == system_name.lower():
                 current_index = i
-                on_route = True
+                on_route      = True
                 break
 
         if current_index == -1:
             self.log("Current system not in route, searching closest system...")
 
-            min_distance = float("inf")
+            min_distance  = float("inf")
             closest_index = -1
 
             for i, jump in enumerate(self.my_route):
                 dist = self.distance((jump["x"], jump["y"], jump["z"]), current_coordinates)
                 if dist < min_distance:
-                    min_distance = dist
+                    min_distance  = dist
                     closest_index = i
 
             current_index = closest_index
@@ -1394,7 +1391,7 @@ class EdSpanshApp:
         if self.route_index >= len(self.my_route):
             return "ROUTE_FINISHED"
 
-        next_system = self.my_route[self.route_index]
+        next_system     = self.my_route[self.route_index]
         remaining_route = self.my_route[self.route_index:]
 
         next_wp_coord = (
@@ -1456,117 +1453,96 @@ class EdSpanshApp:
         scoopable_star,
         neutron_star,
     ):
-        img_width = 1000
+        img_width  = 1000
         img_height = 445
 
-        bg_color = (6, 8, 12)
-        line_dim = (80, 40, 0)
-
-        ed_orange = (255, 115, 0)
+        bg_color     = (6, 8, 12)
+        line_dim     = (80, 40, 0)
+        ed_orange    = (255, 115, 0)
         ed_orange_soft = (220, 100, 0)
-        ed_orange_dim = (150, 70, 0)
-        ed_cyan = (89, 223, 227)
-
-        text_main = (245, 240, 230)
-        text_dim = (150, 145, 138)
-
-        color_on = (40, 210, 110)
-        color_off = (231, 76, 60)
+        ed_orange_dim  = (150, 70, 0)
+        ed_cyan      = (89, 223, 227)
+        color_on     = (40, 210, 110)
+        color_off    = (231, 76, 60)
         color_unknown = (128, 128, 128)
-
-        font_name = "arial.ttf"
+        font_name    = "arial.ttf"
 
         try:
-            font_big = ImageFont.truetype(font_name, 28)
+            font_big    = ImageFont.truetype(font_name, 28)
             font_medium = ImageFont.truetype(font_name, 22)
-            font_small = ImageFont.truetype(font_name, 19)
+            font_small  = ImageFont.truetype(font_name, 19)
         except IOError:
-            font_big = ImageFont.load_default()
+            font_big    = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            font_small  = ImageFont.load_default()
 
-        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img  = Image.new("RGB", (img_width, img_height), color=bg_color)
         draw = ImageDraw.Draw(img)
 
-        title_text = f"NAVIGATION TO: {str(destination).upper()}"
-        title_font = self._fit_font(draw, title_text, font_name, start_size=22, min_size=14, max_width=740)
+        title_text   = f"NAVIGATION TO: {str(destination).upper()}"
+        title_font   = self._fit_font(draw, title_text, font_name, start_size=22, min_size=14, max_width=740)
         current_text = str(current_system).upper()
         current_font = self._fit_font(draw, current_text, font_name, start_size=38, min_size=20, max_width=900)
-        next_text = f"{str(system_name).upper()} ({jump_distance:.0f} LY)"
-        next_font = self._fit_font(draw, next_text, font_name, start_size=38, min_size=20, max_width=680)
+        next_text    = f"{str(system_name).upper()} ({jump_distance:.0f} LY)"
+        next_font    = self._fit_font(draw, next_text, font_name, start_size=38, min_size=20, max_width=680)
 
-        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
+        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange,     width=2)
         draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
 
-        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
-        draw.line([(35, 160), (965, 160)], fill=line_dim, width=1)
-        draw.line([(35, 315), (965, 315)], fill=line_dim, width=1)
+        draw.line([(35, 68),  (965, 68)],  fill=ed_orange_dim, width=1)
+        draw.line([(35, 160), (965, 160)], fill=line_dim,       width=1)
+        draw.line([(35, 315), (965, 315)], fill=line_dim,       width=1)
 
         draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
 
-        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
-        route_status_color = color_on if current_system_on_route else color_off
+        route_status_text  = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
+        route_status_color = color_on   if current_system_on_route else color_off
 
         route_dot_y = 30
         draw.ellipse([(820, route_dot_y), (846, route_dot_y + 26)], fill=route_status_color)
         draw.text((860, route_dot_y + 1), route_status_text, fill=ed_orange, font=font_medium)
 
-        draw.text((45, 82), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
-        draw.text((45, 108), current_text, fill=ed_cyan, font=current_font)
+        draw.text((45, 82),  "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
+        draw.text((45, 108), current_text,      fill=ed_cyan,        font=current_font)
 
         draw.text((45, 178), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_small)
-        draw.text((45, 205), next_text, fill=ed_orange, font=next_font)
+        draw.text((45, 205), next_text,        fill=ed_orange,      font=next_font)
 
-        scoop_text = "SCOOPABLE"
-        scoop_text_color = ed_orange
-        
-        if scoopable_star is None:
-            scoop_color = color_unknown
-        elif scoopable_star:
-            scoop_color = color_on
-        else:
-            scoop_color = color_off
-
+        scoop_color = color_unknown if scoopable_star is None else (color_on if scoopable_star else color_off)
         neutron_color = color_on if neutron_star else color_off
-        neutron_text = "NEUTRON STAR"
-        neutron_text_color = ed_orange
 
-        draw.ellipse([(55, 265), (81, 291)], fill=scoop_color)
-        draw.text((95, 266), scoop_text, fill=scoop_text_color, font=font_medium)
-
+        draw.ellipse([(55,  265), (81,  291)], fill=scoop_color)
+        draw.text((95,  266), "SCOOPABLE",    fill=ed_orange, font=font_medium)
         draw.ellipse([(310, 265), (336, 291)], fill=neutron_color)
-        draw.text((350, 266), neutron_text, fill=neutron_text_color, font=font_medium)
+        draw.text((350, 266), "NEUTRON STAR", fill=ed_orange, font=font_medium)
 
         metric_label_y = 335
         metric_value_y = 362
 
-        draw.text((70, metric_label_y), "JUMPS LEFT", fill=ed_orange_dim, font=font_small)
-        draw.text((70, metric_value_y), f"{jumps_remain}", fill=ed_orange, font=font_big)
-
-        draw.text((370, metric_label_y), "DISTANCE REMAINING", fill=ed_orange_dim, font=font_small)
+        draw.text((70,  metric_label_y), "JUMPS LEFT",          fill=ed_orange_dim, font=font_small)
+        draw.text((70,  metric_value_y), f"{jumps_remain}",      fill=ed_orange,     font=font_big)
+        draw.text((370, metric_label_y), "DISTANCE REMAINING",  fill=ed_orange_dim, font=font_small)
         draw.text((370, metric_value_y), f"{distance_remain:n} LY", fill=ed_orange, font=font_big)
-
-        draw.text((690, metric_label_y), "TRAVELED", fill=ed_orange_dim, font=font_small)
+        draw.text((690, metric_label_y), "TRAVELED",            fill=ed_orange_dim, font=font_small)
         draw.text((690, metric_value_y), f"{distance_traveled:n} LY", fill=ed_orange, font=font_big)
 
         draw.line([(320, 330), (320, 400)], fill=line_dim, width=1)
         draw.line([(645, 330), (645, 400)], fill=line_dim, width=1)
 
-        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
-        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
-        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
-        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
-        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
-        draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
-        draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
+        # Corner brackets
+        for x1, y1, x2, y2, dx, dy in [
+            (22, 22, 52, 22, 22, 52), (22, 22, 22, 52, 22, 52),
+            (948, 22, 978, 22, 978, 52), (978, 22, 978, 52, 978, 52),
+            (22, 393, 22, 423, 52, 423), (22, 423, 52, 423, 52, 423),
+            (948, 423, 978, 423, 978, 423), (978, 393, 978, 423, 978, 423),
+        ]:
+            draw.line([(x1, y1), (x2, y2)], fill=ed_orange, width=2)
 
         output_dir = os.path.dirname(self.kneeboard_output_img_file)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
 
         img.save(self.kneeboard_output_img_file)
-
     def gen_destination_reached_image(
         self,
         current_system,
@@ -1576,87 +1552,75 @@ class EdSpanshApp:
         distance_remain,
         distance_traveled,
     ):
-        img_width = 1000
+        img_width  = 1000
         img_height = 445
 
-        bg_color = (6, 8, 12)
-        line_dim = (80, 40, 0)
-
-        ed_orange = (255, 115, 0)
+        bg_color       = (6, 8, 12)
+        line_dim       = (80, 40, 0)
+        ed_orange      = (255, 115, 0)
         ed_orange_soft = (220, 100, 0)
-        ed_orange_dim = (150, 70, 0)
-        ed_cyan = (89, 223, 227)
-
-        text_main = (245, 240, 230)
-        text_dim = (150, 145, 138)
-
-        color_on = (40, 210, 110)
-        color_off = (231, 76, 60)
-        color_unknown = (128, 128, 128)
-
-        font_name = "arial.ttf"
+        ed_orange_dim  = (150, 70, 0)
+        ed_cyan        = (89, 223, 227)
+        color_on       = (40, 210, 110)
+        color_off      = (231, 76, 60)
+        font_name      = "arial.ttf"
 
         try:
-            font_big = ImageFont.truetype(font_name, 28)
+            font_big    = ImageFont.truetype(font_name, 28)
             font_medium = ImageFont.truetype(font_name, 22)
-            font_small = ImageFont.truetype(font_name, 19)
+            font_small  = ImageFont.truetype(font_name, 19)
         except IOError:
-            font_big = ImageFont.load_default()
+            font_big    = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            font_small  = ImageFont.load_default()
 
-        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img  = Image.new("RGB", (img_width, img_height), color=bg_color)
         draw = ImageDraw.Draw(img)
 
-        title_text = f"NAVIGATION TO: {str(destination).upper()}"
-        title_font = self._fit_font(draw, title_text, font_name, start_size=22, min_size=14, max_width=740)
+        title_text   = f"NAVIGATION TO: {str(destination).upper()}"
+        title_font   = self._fit_font(draw, title_text, font_name, start_size=22, min_size=14, max_width=740)
         current_text = str(current_system).upper()
         current_font = self._fit_font(draw, current_text, font_name, start_size=38, min_size=20, max_width=900)
-        next_text = f"DESTINATION REACHED"
-        next_font = self._fit_font(draw, next_text, font_name, start_size=38, min_size=20, max_width=680)
+        next_text    = "DESTINATION REACHED"
+        next_font    = self._fit_font(draw, next_text,    font_name, start_size=38, min_size=20, max_width=680)
 
-        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
+        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange,     width=2)
         draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
 
-        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
-        draw.line([(35, 160), (965, 160)], fill=line_dim, width=1)
-        draw.line([(35, 315), (965, 315)], fill=line_dim, width=1)
+        draw.line([(35, 68),  (965, 68)],  fill=ed_orange_dim, width=1)
+        draw.line([(35, 160), (965, 160)], fill=line_dim,       width=1)
+        draw.line([(35, 315), (965, 315)], fill=line_dim,       width=1)
 
         draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
 
-        route_status_text = "REACHED"
-        route_status_color = color_on
-
         route_dot_y = 30
-        draw.ellipse([(820, route_dot_y), (846, route_dot_y + 26)], fill=route_status_color)
-        draw.text((860, route_dot_y + 1), route_status_text, fill=ed_orange, font=font_medium)
+        draw.ellipse([(820, route_dot_y), (846, route_dot_y + 26)], fill=color_on)
+        draw.text((860, route_dot_y + 1), "REACHED", fill=ed_orange, font=font_medium)
 
-        draw.text((45, 82), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
-        draw.text((45, 108), current_text, fill=ed_cyan, font=current_font)
-
-        draw.text((45, 205), next_text, fill=color_on, font=next_font)
+        draw.text((45, 82),  "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
+        draw.text((45, 108), current_text,      fill=ed_cyan,        font=current_font)
+        draw.text((45, 205), next_text,          fill=color_on,       font=next_font)
 
         metric_label_y = 335
         metric_value_y = 362
 
-        draw.text((70, metric_label_y), "JUMPS LEFT", fill=ed_orange_dim, font=font_small)
-        draw.text((70, metric_value_y), f"{jumps_remain}", fill=ed_orange, font=font_big)
-
-        draw.text((370, metric_label_y), "DISTANCE REMAINING", fill=ed_orange_dim, font=font_small)
-        draw.text((370, metric_value_y), f"{distance_remain:n} LY", fill=ed_orange, font=font_big)
-
-        draw.text((690, metric_label_y), "TRAVELED", fill=ed_orange_dim, font=font_small)
-        draw.text((690, metric_value_y), f"{distance_traveled:n} LY", fill=ed_orange, font=font_big)
+        draw.text((70,  metric_label_y), "JUMPS LEFT",             fill=ed_orange_dim, font=font_small)
+        draw.text((70,  metric_value_y), f"{jumps_remain}",         fill=ed_orange,     font=font_big)
+        draw.text((370, metric_label_y), "DISTANCE REMAINING",     fill=ed_orange_dim, font=font_small)
+        draw.text((370, metric_value_y), f"{distance_remain:n} LY", fill=ed_orange,     font=font_big)
+        draw.text((690, metric_label_y), "TRAVELED",               fill=ed_orange_dim, font=font_small)
+        draw.text((690, metric_value_y), f"{distance_traveled:n} LY", fill=ed_orange,  font=font_big)
 
         draw.line([(320, 330), (320, 400)], fill=line_dim, width=1)
         draw.line([(645, 330), (645, 400)], fill=line_dim, width=1)
 
-        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
-        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
-        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
-        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
-        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
+        # Corner brackets
+        draw.line([(22,  22),  (52,  22)],  fill=ed_orange, width=2)
+        draw.line([(22,  22),  (22,  52)],  fill=ed_orange, width=2)
+        draw.line([(948, 22),  (978, 22)],  fill=ed_orange, width=2)
+        draw.line([(978, 22),  (978, 52)],  fill=ed_orange, width=2)
+        draw.line([(22,  393), (22,  423)], fill=ed_orange, width=2)
+        draw.line([(22,  423), (52,  423)], fill=ed_orange, width=2)
         draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
         draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
 
@@ -1678,13 +1642,13 @@ class EdSpanshApp:
 
         self.total_distance_traveled = 0.0
         self.monitoring_active = True
-        self.stop_requested = False
-        self.is_paused = False
+        self.stop_requested    = False
+        self.is_paused         = False
 
-        t = THEMES[self.current_theme_name]
-        self.start_btn.config(text="Monitor Active", state="disabled", bg=t["btn_disabled_bg"])
-        self.pause_btn.config(state="normal", text="Pause")
+        self.start_btn.config(state="disabled")
+        self.pause_btn.config(state="normal")
         self.stop_btn.config(state="normal")
+        self._update_transport_btn_states()
 
         threading.Thread(target=self.monitor_journal, daemon=True).start()
 
@@ -1693,24 +1657,25 @@ class EdSpanshApp:
             return
 
         self.is_paused = not self.is_paused
+        self._update_transport_btn_states()
+
         if self.is_paused:
-            self.pause_btn.config(text="Resume")
             self.log("Monitor paused. Events will be ignored.")
         else:
-            self.pause_btn.config(text="Pause")
             self.log("Monitor resumed. Waiting for events.")
 
     def stop_monitoring(self, preserve_arrived_state=False):
         if not self.monitoring_active and not preserve_arrived_state:
             return
 
-        self.stop_requested = True
+        self.stop_requested    = True
         self.monitoring_active = False
+        self.is_paused         = False
 
-        t = THEMES[self.current_theme_name]
-        self.start_btn.config(text="Load File & Start Monitor", state="normal", bg=t["btn_start_bg"])
-        self.pause_btn.config(state="disabled", text="Pause")
+        self.start_btn.config(state="normal")
+        self.pause_btn.config(state="disabled")
         self.stop_btn.config(state="disabled")
+        self._update_transport_btn_states()
 
         if not preserve_arrived_state:
             self.reset_dashboard()
@@ -1719,17 +1684,16 @@ class EdSpanshApp:
 
     def handle_route_finished(self, system_name):
         self.gen_destination_reached_image(
-            destination=self.my_route[-1]['name'],
+            destination=self.my_route[-1]["name"],
             current_system=system_name,
             current_system_on_route=True,
             jumps_remain=0,
             distance_remain=0,
             distance_traveled=round(self.total_distance_traveled, 2),
         )
-        self.refresh_dashboard_image()            
+        self.refresh_dashboard_image()
         self.log("Destination reached! You have arrived at the end of your Spansh route.")
         self.stop_monitoring(preserve_arrived_state=True)
-
     # ------------------------------------------------------------------
     # Event handling
     # ------------------------------------------------------------------
@@ -1738,7 +1702,7 @@ class EdSpanshApp:
             return
 
         system_name = event_data.get("StarSystem")
-        star_pos = event_data.get("StarPos")
+        star_pos    = event_data.get("StarPos")
 
         if not system_name:
             self.log("Ignored event without StarSystem.")
@@ -1884,7 +1848,10 @@ class EdSpanshApp:
             self.ui_call(self.stop_monitoring)
 
 
+# ----------------------------------------------------------------------
+# Entry point
+# ----------------------------------------------------------------------
 if __name__ == "__main__":
     root = tkinterdnd2.TkinterDnD.Tk()
-    app = EdSpanshApp(root)
+    app  = EdSpanshApp(root)
     root.mainloop()
