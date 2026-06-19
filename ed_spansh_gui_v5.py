@@ -81,8 +81,8 @@ class EdSpanshApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Elite Dangerous - Spansh VR Navigator")
-        self.root.geometry("750x850")
-        self.root.minsize(650, 650)
+        self.root.geometry("1500x850")
+        self.root.minsize(1200, 650)
 
         self.my_route = []
         self.route_index = 0
@@ -247,21 +247,8 @@ class EdSpanshApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill="both", expand=True)
 
-        # ── Horizontaler Split: links Controls | rechts Log ────────────
-        self.content_frame = tk.Frame(self.main_frame)
-        self.content_frame.pack(fill="both", expand=True)
-        self.content_frame.columnconfigure(0, weight=3)
-        self.content_frame.columnconfigure(1, weight=1)
-        self.content_frame.rowconfigure(0, weight=1)
-
-        self.left_frame = tk.Frame(self.content_frame)
-        self.left_frame.grid(row=0, column=0, sticky="nsew")
-
-        self.right_frame = tk.Frame(self.content_frame)
-        self.right_frame.grid(row=0, column=1, sticky="nsew")
-
-        # ── CONTROL BUTTONS (ganz oben, links) ────────────────────────
-        self.btn_frame = tk.Frame(self.left_frame)
+        # ── CONTROL BUTTONS – volle Breite, ganz oben ─────────────────
+        self.btn_frame = tk.Frame(self.main_frame)
         self.btn_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         self.start_btn = tk.Button(
@@ -310,6 +297,19 @@ class EdSpanshApp:
             bd=3,
         )
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
+
+        # ── Horizontaler Split: links Controls | rechts Log ────────────
+        self.content_frame = tk.Frame(self.main_frame)
+        self.content_frame.pack(fill="both", expand=True)
+        self.content_frame.columnconfigure(0, weight=3)
+        self.content_frame.columnconfigure(1, weight=1)
+        self.content_frame.rowconfigure(0, weight=1)
+
+        self.left_frame = tk.Frame(self.content_frame)
+        self.left_frame.grid(row=0, column=0, sticky="nsew")
+
+        self.right_frame = tk.Frame(self.content_frame)
+        self.right_frame.grid(row=0, column=1, sticky="nsew")
 
         # ── Spansh tools / ship builds (links) ────────────────────────
         self.ship_build_frame = tk.LabelFrame(
@@ -492,7 +492,7 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
-        # ── Log output (rechts) ────────────────────────────────────────
+        # ── Log output (rechts, volle Höhe) ───────────────────────────
         self.output_label = tk.Label(
             self.right_frame,
             text="Log Output and Status:",
@@ -697,6 +697,9 @@ class EdSpanshApp:
         self.main_frame.config(bg=t["bg"])
         self.file_frame.config(bg=t["bg"])
         self.btn_frame.config(bg=t["bg"])
+        self.content_frame.config(bg=t["bg"])
+        self.left_frame.config(bg=t["bg"])
+        self.right_frame.config(bg=t["bg"])
 
         # ── Neue Frames einfärben ──────────────────────────────────────
         self.content_frame.config(bg=t["bg"])
