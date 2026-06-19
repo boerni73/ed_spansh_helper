@@ -101,7 +101,6 @@ class EdSpanshApp:
 
         self.ship_builds = []
 
-        self.create_menu()
         self.create_widgets()
         self.setup_table_style()
         self.setup_combobox_style()
@@ -203,44 +202,6 @@ class EdSpanshApp:
             return False
 
     # ------------------------------------------------------------------
-    # Menu
-    # ------------------------------------------------------------------
-    def create_menu(self):
-        t = THEMES[self.current_theme_name]
-
-        self.menu_bar = tk.Menu(
-            self.root,
-            tearoff=0,
-            bg=t["panel_bg"],
-            fg=t["label_fg"],
-            activebackground=t["accent_fg"],
-            activeforeground=t["fg"],
-        )
-
-        self.settings_menu = tk.Menu(
-            self.menu_bar,
-            tearoff=0,
-            bg=t["panel_bg"],
-            fg=t["fg"],
-            activebackground=t["accent_fg"],
-            activeforeground=t["fg"],
-        )
-
-        self.settings_menu.add_command(
-            label="Select ED Journal Directory...",
-            command=self.browse_journal_directory,
-        )
-        self.settings_menu.add_command(
-            label="Select Kneeboard Image Output File...",
-            command=self.browse_kneeboard_image_file,
-        )
-        self.settings_menu.add_separator()
-        self.settings_menu.add_command(label="Exit", command=self.root.quit)
-
-        self.menu_bar.add_cascade(label="Settings", menu=self.settings_menu)
-        self.root.config(menu=self.menu_bar)
-
-    # ------------------------------------------------------------------
     # Widget creation
     # ------------------------------------------------------------------
     def create_widgets(self):
@@ -251,6 +212,7 @@ class EdSpanshApp:
         self.btn_frame = tk.Frame(self.main_frame)
         self.btn_frame.pack(fill="x", padx=10, pady=(10, 5))
 
+        # Gruppe 1: Transport-Controls (expandieren)
         self.start_btn = tk.Button(
             self.btn_frame,
             text="▶",
@@ -297,6 +259,43 @@ class EdSpanshApp:
             bd=3,
         )
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
+
+        # Trennlinie zwischen den Gruppen
+        self.btn_separator = tk.Frame(self.btn_frame, bg="#ff7300", width=2)
+        self.btn_separator.pack(side="left", fill="y", padx=12, pady=3)
+
+        # Gruppe 2: Settings / Exit (feste Breite, kein expand)
+        self.settings_btn = tk.Button(
+            self.btn_frame,
+            text="⚙  Settings",
+            command=self.open_settings_dialog,
+            bg=BTN_BG,
+            fg="#ff7300",
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground="#ffaa44",
+            font=("Arial", 14, "bold"),
+            pady=5,
+            relief="raised",
+            bd=3,
+            padx=14,
+        )
+        self.settings_btn.pack(side="left", padx=(0, 2))
+
+        self.exit_btn = tk.Button(
+            self.btn_frame,
+            text="✕  Exit",
+            command=self.root.quit,
+            bg=BTN_BG,
+            fg=BTN_FG_STOP,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_STOP,
+            font=("Arial", 14, "bold"),
+            pady=5,
+            relief="raised",
+            bd=3,
+            padx=14,
+        )
+        self.exit_btn.pack(side="left", padx=(0, 0))
 
         # ── Horizontaler Split: links Controls | rechts Log ────────────
         self.content_frame = tk.Frame(self.main_frame)
@@ -877,22 +876,30 @@ class EdSpanshApp:
         except Exception:
             pass
 
-        # ── Native menu styling (best effort) ───────────────────────────
-        try:
-            self.menu_bar.config(
-                bg=t["panel_bg"],
-                fg=t["label_fg"],
-                activebackground=t["accent_fg"],
-                activeforeground=t["fg"]
-            )
-            self.settings_menu.config(
-                bg=t["panel_bg"],
-                fg=t["fg"],
-                activebackground=t["accent_fg"],
-                activeforeground=t["fg"]
-            )
-        except Exception:
-            pass
+        # ── Neue Frames einfärben ──────────────────────────────────────
+        self.content_frame.config(bg=t["bg"])
+        self.left_frame.config(bg=t["bg"])
+        self.right_frame.config(bg=t["bg"])
+
+        # ── Trennlinie ─────────────────────────────────────────────────
+        self.btn_separator.config(bg="#ff7300")
+
+        # ── Settings / Exit Buttons ────────────────────────────────────
+        self.settings_btn.config(
+            bg=BTN_BG,
+            fg="#ff7300",
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground="#ffaa44",
+            bd=3,
+        )
+
+        self.exit_btn.config(
+            bg=BTN_BG,
+            fg=BTN_FG_STOP,
+            activebackground=BTN_BG_ACTIVE,
+            activeforeground=BTN_FG_STOP,
+            bd=3,
+        )
 
     def _update_transport_btn_states(self):
         """Setzt relief der drei Transport-Buttons passend zum aktuellen Zustand."""
@@ -1123,6 +1130,191 @@ class EdSpanshApp:
             lightcolor=t["panel_border"],
             darkcolor=t["panel_border"]
         )
+
+    def open_settings_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Settings")
+        dialog.geometry("650x300")
+        dialog.minsize(550, 250)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.config(bg="#000000")
+
+        # ── Notebook-Style ─────────────────────────────────────────────
+        style = ttk.Style()
+        style.configure(
+            "Settings.TNotebook",
+            background="#000000",
+            bordercolor="#ff7300",
+            tabmargins=[2, 4, 0, 0],
+        )
+        style.configure(
+            "Settings.TNotebook.Tab",
+            background="#1a1a1a",
+            foreground="#ff7300",
+            padding=[12, 5],
+            font=("Arial", 10, "bold"),
+        )
+        style.map(
+            "Settings.TNotebook.Tab",
+            background=[("selected", "#000000"), ("active", "#2a2a2a")],
+            foreground=[("selected", "#ff7300"), ("active", "#ffaa44")],
+        )
+
+        notebook = ttk.Notebook(dialog, style="Settings.TNotebook")
+        notebook.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+
+        # ── Tab 1: File Locations ──────────────────────────────────────
+        tab_files = tk.Frame(notebook, bg="#000000")
+        notebook.add(tab_files, text="  File Locations  ")
+
+        tab_files.columnconfigure(0, weight=1)
+        tab_files.columnconfigure(1, weight=0)
+
+        # Journal Directory
+        tk.Label(
+            tab_files,
+            text="ED Journal Directory:",
+            bg="#000000",
+            fg="#ff7300",
+            font=("Arial", 10, "bold"),
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(14, 2))
+
+        journal_var = tk.StringVar(value=self.journal_dir)
+
+        journal_entry = tk.Entry(
+            tab_files,
+            textvariable=journal_var,
+            bg="#1a1a1a",
+            fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9),
+            relief="flat",
+            bd=4,
+        )
+        journal_entry.grid(row=1, column=0, sticky="ew", padx=(12, 4), pady=(0, 8), ipady=4)
+
+        def browse_journal():
+            selected = filedialog.askdirectory(
+                initialdir=journal_var.get(),
+                title="Select ED Journal Directory"
+            )
+            if selected:
+                journal_var.set(os.path.normpath(selected))
+
+        tk.Button(
+            tab_files,
+            text="Browse...",
+            command=browse_journal,
+            bg="#000000",
+            fg="#ff7300",
+            activebackground="#1a1a1a",
+            activeforeground="#ffaa44",
+            relief="flat",
+            bd=2,
+            padx=10,
+            pady=3,
+            font=("Arial", 9, "bold"),
+        ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
+
+        # Kneeboard Output File
+        tk.Label(
+            tab_files,
+            text="Kneeboard Image Output File:",
+            bg="#000000",
+            fg="#ff7300",
+            font=("Arial", 10, "bold"),
+            anchor="w",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(6, 2))
+
+        kneeboard_var = tk.StringVar(value=self.kneeboard_output_img_file)
+
+        kneeboard_entry = tk.Entry(
+            tab_files,
+            textvariable=kneeboard_var,
+            bg="#1a1a1a",
+            fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9),
+            relief="flat",
+            bd=4,
+        )
+        kneeboard_entry.grid(row=3, column=0, sticky="ew", padx=(12, 4), pady=(0, 8), ipady=4)
+
+        def browse_kneeboard():
+            initial_dir  = (os.path.dirname(kneeboard_var.get())
+                            if kneeboard_var.get() else os.path.expanduser("~"))
+            initial_file = (os.path.basename(kneeboard_var.get())
+                            if kneeboard_var.get() else "vr_navigation.png")
+            selected = filedialog.asksaveasfilename(
+                initialdir=initial_dir,
+                initialfile=initial_file,
+                title="Select Kneeboard Image Output File",
+                defaultextension=".png",
+                filetypes=[("PNG Files", "*.png")],
+            )
+            if selected:
+                kneeboard_var.set(os.path.normpath(selected))
+
+        tk.Button(
+            tab_files,
+            text="Browse...",
+            command=browse_kneeboard,
+            bg="#000000",
+            fg="#ff7300",
+            activebackground="#1a1a1a",
+            activeforeground="#ffaa44",
+            relief="flat",
+            bd=2,
+            padx=10,
+            pady=3,
+            font=("Arial", 9, "bold"),
+        ).grid(row=3, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
+
+        # ── Buttons Save / Cancel ──────────────────────────────────────
+        btn_row = tk.Frame(dialog, bg="#000000")
+        btn_row.pack(fill="x", padx=10, pady=(0, 10))
+
+        def save_and_close():
+            self.journal_dir = journal_var.get().strip()
+            self.kneeboard_output_img_file = kneeboard_var.get().strip()
+            self.save_settings()
+            self.log(f"Settings saved.")
+            self.log(f"  Journal Dir : {self.journal_dir}")
+            self.log(f"  Kneeboard   : {self.kneeboard_output_img_file}")
+            dialog.destroy()
+
+        tk.Button(
+            btn_row,
+            text="Cancel",
+            command=dialog.destroy,
+            bg="#000000",
+            fg=BTN_FG_STOP,
+            activebackground="#1a1a1a",
+            activeforeground=BTN_FG_STOP,
+            relief="flat",
+            bd=2,
+            padx=14,
+            pady=4,
+            font=("Arial", 10, "bold"),
+        ).pack(side="right", padx=(6, 0))
+
+        tk.Button(
+            btn_row,
+            text="Save & Close",
+            command=save_and_close,
+            bg="#000000",
+            fg="#ff7300",
+            activebackground="#1a1a1a",
+            activeforeground="#ffaa44",
+            relief="flat",
+            bd=2,
+            padx=14,
+            pady=4,
+            font=("Arial", 10, "bold"),
+        ).pack(side="right")
+
     def open_spansh_website(self):
         try:
             webbrowser.open("https://spansh.co.uk")
