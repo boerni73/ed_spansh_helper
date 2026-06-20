@@ -13,17 +13,28 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
 
 ## Table of Contents
 
-- [Features](#features)
-- [Required Downloads](#required-downloads)
-- [What It Does](#what-it-does)
-- [Typical Workflow](#typical-workflow)
-- [Installation](#installation)
-- [Screenshots / Images](#screenshots--images)
-- [VoiceAttack Workflow](#example-voiceattack-workflow)
-- [Notes](#notes)
-- [Known Issues](#known-issues)
-- [Recommended VR Setup](#recommended-vr-setup)
-- [Disclaimer](#disclaimer)
+- [Elite Dangerous - Spansh VR Navigator](#elite-dangerous---spansh-vr-navigator)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Required Downloads](#required-downloads)
+  - [What It Does](#what-it-does)
+  - [Typical Workflow](#typical-workflow)
+  - [Installation](#installation)
+    - [Requirements](#requirements)
+    - [Python packages](#python-packages)
+    - [Run](#run)
+    - [Build EXE](#build-exe)
+    - [requirements.txt](#requirementstxt)
+  - [Screenshots / Images](#screenshots--images)
+    - [Main Window](#main-window)
+    - [VR Settings](#vr-settings)
+    - [Generated Navigation Image](#generated-navigation-image)
+  - [](#)
+  - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
+  - [Notes](#notes)
+  - [Known Issues](#known-issues)
+  - [Recommended VR Setup](#recommended-vr-setup)
+  - [Disclaimer](#disclaimer)
 ---
 
 ## Features
@@ -128,18 +139,6 @@ tkinterdnd2
 ---
 
 ## Screenshots / Images
-
-You can add screenshots to this repository and display them here.
-
-Recommended folder structure:
-
-~~~text
-docs/images/main_window.png
-docs/images/vr_settings.png
-docs/images/navigation_image.png
-~~~
-
-Example image section:
 
 ### Main Window
 
