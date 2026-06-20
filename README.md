@@ -133,17 +133,18 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 4. (optional) kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
 ![Doc File-Tab Setup](docs/images/file_setup.png)
 5. On the VR Mode Tab
-OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
+Configure OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
 Let's assume you downloaded it to c:\tmp\newest_openxr.dll
-
-Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it. I really don't know where this is located in your case... for me it's INSTALLATION_DIRECTORY\EDLaunch\Products\elite-dangerous-odyssey-64\Openvr\win64
-
-If everything worked, your EliteDangerous is now running with the OpenXR DLL, which is (probably) needed for OpenKneeboard, but even more important, should give you a significant FPS Boost
-
 ![Doc VR-Mode-Tab Setup 1](docs/images/vr_mode_setup1.png)
+6. Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it. I really don't know where this is located in your case... for me it's INSTALLATION_DIRECTORY\EDLaunch\Products\elite-dangerous-odyssey-64\Openvr\win64
 ![Doc VR-Mode-Tab Setup 2](docs/images/vr_mode_setup2.png)
+7. If you selected the correct Path, you should see a setup required Message. Press "Setup/Re-Setup"
 ![Doc VR-Mode-Tab Setup 3](docs/images/vr_mode_setup3.png)
+8. It should detect, that you're on the SteamVR/OpenVR Version. Press OpenXR
 ![Doc VR-Mode-Tab Setup 4](docs/images/vr_mode_setup4.png)
+
+If everything worked, your EliteDangerous is now running with the OpenXR DLL, which is (probably) needed for OpenKneeboard, but even more important, should give you a significant FPS Boost.
+You can change back anytime. If you're using some Steam-Overlay Software like OVR Toolkit, it's likely it won't work anymore. In the directory you specified, there are 3 Files now. openvr_api.dll (dll currently used), openvr_api.dll.steamvr (the original dll) and openvr_api.dll.openxr (a copy of the dll you downloaded). You can also manually rename these files to get back to your original configuration
 
 ## Workflow to import a Spansh Route
 
