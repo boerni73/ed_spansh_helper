@@ -29,6 +29,7 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
     - [Generated Navigation Image](#generated-navigation-image)
   - [](#)
   - [Initial Setup](#initial-setup)
+  - [Workflow to import a Spansh Route](#workflow-to-import-a-spansh-route)
   - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
   - [Notes](#notes)
   - [Known Issues](#known-issues)
@@ -130,10 +131,22 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 2. Open **Settings**
 3. journal directory. This is where ED writes the journal logs. default is C:\Users\YOUR_USER\Saved Games\Frontier Developments\Elite Dangerous
 4. (optional) kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
-![Generated Navigation Image](docs/images/file_setup.png)
+![Doc File-Tab Setup](docs/images/file_setup.png)
 5. On the VR Mode Tab
-   - OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
-   - Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it
+OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
+Let's assume you downloaded it to c:\tmp\newest_openxr.dll
+
+Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it. I really don't know where this is located in your case... for me it's INSTALLATION_DIRECTORY\EDLaunch\Products\elite-dangerous-odyssey-64\Openvr\win64
+
+If everything worked, your EliteDangerous is now running with the OpenXR DLL, which is (probably) needed for OpenKneeboard, but even more important, should give you a significant FPS Boost
+
+![Doc VR-Mode-Tab Setup 1](docs/images/vr_mode_setup1.png)
+![Doc VR-Mode-Tab Setup 2](docs/images/vr_mode_setup2.png)
+![Doc VR-Mode-Tab Setup 3](docs/images/vr_mode_setup3.png)
+![Doc VR-Mode-Tab Setup 4](docs/images/vr_mode_setup4.png)
+
+## Workflow to import a Spansh Route
+
 1. Load a **Spansh route JSON**
 2. Click **Start**
 3. Jump normally in Elite Dangerous
