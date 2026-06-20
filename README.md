@@ -73,7 +73,6 @@ This makes it easier to use Spansh routes while flying in VR.
 ```bash
 pip install pillow tkinterdnd2
 
-```markdown
 ### Run
 ```bash
 python ed_spansh_helper.py
