@@ -129,10 +129,10 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 1. Start the app
 2. Open **Settings**
 3. journal directory. This is where ED writes the journal logs. default is C:\Users\YOUR_USER\Saved Games\Frontier Developments\Elite Dangerous
-4. kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
+4. (optional) kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
 ![Generated Navigation Image](docs/images/file_setup.png)
-
-   - OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded
+5. On the VR Mode Tab
+   - OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
    - Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it
 1. Load a **Spansh route JSON**
 2. Click **Start**

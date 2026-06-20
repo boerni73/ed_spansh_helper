@@ -36,7 +36,7 @@ except locale.Error:
 DEFAULT_JOURNAL_DIR = os.path.expanduser(
     r"~/Saved Games/Frontier Developments/Elite Dangerous"
 )
-SETTINGS_FILE = os.path.join(os.path.expanduser("~"), "ed_spansh_settings.json")
+SETTINGS_FILE = os.path.join(os.path.expanduser("~"), "ed_spansh_settings1.json")
 DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE = os.path.join(
     os.path.expanduser("~"), "vr_navigation.png"
 )
