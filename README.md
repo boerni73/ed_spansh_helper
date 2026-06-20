@@ -17,10 +17,8 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [Table of Contents](#table-of-contents)
   - [Motivation \& Background](#motivation--background)
     - [Development Note](#development-note)
-  - [Features](#features)
-  - [Required Downloads](#required-downloads)
   - [What It Does](#what-it-does)
-  - [Typical Workflow](#typical-workflow)
+  - [Required Downloads](#required-downloads)
   - [Installation](#installation)
     - [Requirements](#requirements)
     - [Python packages](#python-packages)
@@ -30,6 +28,7 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
     - [Main Window](#main-window)
     - [Generated Navigation Image](#generated-navigation-image)
   - [](#)
+  - [Initial Setup](#initial-setup)
   - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
   - [Notes](#notes)
   - [Known Issues](#known-issues)
@@ -47,14 +46,18 @@ I originally created this tool for myself to solve a specific pain point in Virt
 
 This project was built with a lot of help from Large Language Models (LLMs). While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase to make it clean and functional.
 
-## Features
+## What It Does
 
-- Load and parse **Spansh route JSON** files. For now I only tested Neutron Plotter and Galaxy Plotter
-- Detects your current system after startup and after a jump
-- Copies the **next waypoint** to the clipboard
-- Generates a **VR-friendly navigation image** which can be displayed using Open Kneeboard
-- Has integrated a Setting to switch openvr_api.dll from Steam/OpenVR-Version to OpenXR and back
-- Lets you store **Ship Build JSON** snippets (to paste into Galaxy Plotter Routes)
+The application is designed to make **VR route navigation** in Elite Dangerous more comfortable.
+
+It continuously tries to determine the **next waypoint** of the loaded Spansh route based on your current location.
+
+Whenever possible, it:
+
+- identifies the next route target
+- copies that system name to the **clipboard**
+- generates a **navigation image**
+- updates the image for viewing in **OpenKneeboard**
 
 ---
 
@@ -72,49 +75,12 @@ The following tools/files must be installed or downloaded manually:
   <https://voiceattack.com/>
 
 ---
-
-## What It Does
-
-The application is designed to make **VR route navigation** in Elite Dangerous more comfortable.
-
-It continuously tries to determine the **next waypoint** of the loaded Spansh route based on your current location.
-
-Whenever possible, it:
-
-- identifies the next route target
-- copies that system name to the **clipboard**
-- generates a **navigation image**
-- updates the image for viewing in **OpenKneeboard**
-
----
-
-## Typical Workflow
-
-1. Start the app
-2. Open **Settings**
-3. Configure:
-   - journal directory
-   - kneeboard image output file
-   - OpenXR DLL source
-   - one or more stored game versions
-4. Load a **Spansh route JSON**
-5. Click **Start**
-6. Jump normally in Elite Dangerous
-7. After each jump, the app updates:
-   - current progress
-   - next waypoint
-   - navigation image
-
----
-
 ## Installation
 
-You can run the [provided .exe from the dist folder](dist/ed_spansh_helper.exe)
+You can run the [provided .exe from the dist folder](dist/ed_spansh_helper.exe) or run the python script
 >
 > [!WARNING]
 > **Antivirus False Positives:** Pre-compiled executables built with `pyinstaller` often trigger false malware warnings in Windows Defender or other antivirus software. This is a common issue with Python-to-EXE converters because they bundle the interpreter into a temporary directory. The tool contains absolutely no malicious code. If you prefer not to bypass your antivirus, you can always safely run the application from the source code using `python ed_spansh_helper.py`.
-
-or you could run it as Python Script
 
 ### Requirements
 
@@ -156,6 +122,25 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 ### Generated Navigation Image
 
 ![Generated Navigation Image](docs/images/navigation_image.png)
+---
+
+## Initial Setup
+
+1. Start the app
+2. Open **Settings**
+3. journal directory. This is where ED writes the journal logs. default is C:\Users\YOUR_USER\Saved Games\Frontier Developments\Elite Dangerous
+(docs/images/navigation_image.png)
+   - kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
+   - OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded
+   - Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it
+4. Load a **Spansh route JSON**
+5. Click **Start**
+6. Jump normally in Elite Dangerous
+7. After each jump, the app updates:
+   - current progress
+   - next waypoint
+   - navigation image
+
 ---
 
 ## Example VoiceAttack Workflow
