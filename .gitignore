@@ -1,0 +1,14 @@
+# PyInstaller outputs
+build/
+*.spec
+
+# Python byte-code / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment files
+.env
+.venv
+env/
+venv/

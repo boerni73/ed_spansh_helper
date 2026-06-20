@@ -26,7 +26,6 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
     - [Python packages](#python-packages)
     - [Run](#run)
     - [Build EXE](#build-exe)
-    - [requirements.txt](#requirementstxt)
   - [Screenshots / Images](#screenshots--images)
     - [Main Window](#main-window)
     - [VR Settings](#vr-settings)
@@ -47,20 +46,16 @@ I originally created this tool for myself to solve a specific pain point in Virt
 
 ### Development Note
 
-This project was built with a lot of help from Large Language Models (LLMs) — including this one! While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase to make it clean and functional.
+This project was built with a lot of help from Large Language Models (LLMs). While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase to make it clean and functional.
 
 ## Features
 
-- Load and parse **Spansh route JSON** files
-- Supports multiple Spansh route types
-- Monitors the latest **Elite Dangerous journal**
-- Detects your current system after startup
-- Tracks route progress
+- Load and parse **Spansh route JSON** files. For now I only tested Neutron Plotter and Galaxy Plotter
+- Detects your current system after startup and after a jump
 - Copies the **next waypoint** to the clipboard
-- Generates a **VR-friendly navigation image**
-- Displays the image inside the app
-- Supports named **VR game versions**
-- Lets you store **Ship Build JSON** snippets
+- Generates a **VR-friendly navigation image** which can be displayed using Open Kneeboard
+- Has integrated a Setting to switch openvr_api.dll from Steam/OpenVR-Version to OpenXR and back
+- Lets you store **Ship Build JSON** snippets (to paste into Galaxy Plotter Routes)
 
 ---
 
@@ -115,6 +110,11 @@ Whenever possible, it:
 
 ## Installation
 
+You can run the provided .exe from the dist folder
+>
+> [!WARNING]
+> **Antivirus False Positives:** Pre-compiled executables built with `pyinstaller` often trigger false malware warnings in Windows Defender or other antivirus software. This is a common issue with Python-to-EXE converters because they bundle the interpreter into a temporary directory. The tool contains absolutely no malicious code. If you prefer not to bypass your antivirus, you can always safely run the application from the source code using `python ed_spansh_helper.py`.
+
 ### Requirements
 
 - Windows
@@ -139,15 +139,10 @@ python ed_spansh_helper.py
 
 ### Build EXE
 
+If you want to build your own Executable
+
 ~~~bash
 pyinstaller --noconsole --onefile ed_spansh_helper.py
-~~~
-
-### requirements.txt
-
-~~~txt
-Pillow
-tkinterdnd2
 ~~~
 
 ---
