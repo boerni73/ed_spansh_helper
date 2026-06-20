@@ -31,7 +31,7 @@ The following tools/files must be installed or downloaded manually:
 - **OpenKneeboard**
   https://openkneeboard.com/
 
-- **VoiceAttack** or similar clipboard/input automation tool
+- **VoiceAttack** or a similar clipboard/input automation tool
   https://voiceattack.com/
 ---
 
@@ -67,23 +67,27 @@ This makes it easier to use Spansh routes while flying in VR.
 - Windows
 - Python 3.10+ recommended
 - Elite Dangerous
-
 ### Python packages
 
-```bash
-pip install pillow tkinterdnd2
+Install the required Python packages:
+
+~~~bash
+pip install -r requirements.txt
+~~~
+
+> `tkinter` is usually included with standard Python on Windows.
 
 ### Run
-```bash
-python ed_spansh_helper.py
 
-```markdown
+~~~bash
+python ed_spansh_helper.py
+~~~
+
 ### Build EXE
 
-```bash
+~~~bash
 pyinstaller --noconsole --onefile ed_spansh_helper.py
-
-```markdown
+~~~
 ---
 
 ## Notes
@@ -94,3 +98,20 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 - The generated PNG can be displayed with **OpenKneeboard**
 - VR DLL switching may require **administrator rights**
 - After a game update, **VR setup may need to be run again**
+
+---
+
+## Recommended VR Setup
+
+- **This app** for route tracking and image generation
+- **OpenKneeboard** for displaying the image in VR
+- **VoiceAttack** for inserting clipboard text into the galaxy map
+- **OpenXR DLL / OpenComposite** for OpenXR mode
+
+---
+
+## Disclaimer
+
+This is a helper utility for Elite Dangerous players.
+
+Use it at your own risk and always verify your paths, DLL files, and automation setup.
