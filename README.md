@@ -35,6 +35,7 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [Known Issues](#known-issues)
   - [Recommended VR Setup](#recommended-vr-setup)
   - [Disclaimer](#disclaimer)
+  - [License](#license)
 
 ---
 
@@ -213,3 +214,20 @@ This way, the waypoint copied by this tool can be inserted into the game with mi
 This is a helper utility for Elite Dangerous players.
 
 Use it at your own risk and always verify your paths, DLL files, and automation setup.
+
+## License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)** License.
+
+You are free to:
+
+- **Share** — copy and redistribute the material in any medium or format.
+- **Adapt** — remix, transform, and build upon the material.
+
+Under the following terms:
+
+- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+- **NonCommercial** — You may not use the material for commercial purposes.
+- **ShareAlike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+For more details, please see the full [Creative Commons Legal Code](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en).
