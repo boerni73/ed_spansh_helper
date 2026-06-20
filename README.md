@@ -109,7 +109,7 @@ Whenever possible, it:
 
 ## Installation
 
-You can run the provided .exe from the dist folder
+You can run the [provided .exe from the dist folder](dist/ed_spansh_helper.exe)
 >
 > [!WARNING]
 > **Antivirus False Positives:** Pre-compiled executables built with `pyinstaller` often trigger false malware warnings in Windows Defender or other antivirus software. This is a common issue with Python-to-EXE converters because they bundle the interpreter into a temporary directory. The tool contains absolutely no malicious code. If you prefer not to bypass your antivirus, you can always safely run the application from the source code using `python ed_spansh_helper.py`.
