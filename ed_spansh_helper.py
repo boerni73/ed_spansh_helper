@@ -1,7 +1,7 @@
 ##########################################################################
 # DATE              13.06.2026                                           #
 #                                                                        #
-# AUTHOR            Bernard Härri but mostly AI (ChatGPT/Gemini/Claude)  #
+# AUTHOR            Bernard Härri (CMDR Weedy Gonzalez), but mostly LLMs #
 #                                                                        #
 # COMPILE: pyinstaller --noconsole --onefile ed_spansh_helper.py         #
 #                                                                        #

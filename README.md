@@ -28,7 +28,6 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
     - [Build EXE](#build-exe)
   - [Screenshots / Images](#screenshots--images)
     - [Main Window](#main-window)
-    - [VR Settings](#vr-settings)
     - [Generated Navigation Image](#generated-navigation-image)
   - [](#)
   - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
@@ -153,10 +152,6 @@ pyinstaller --noconsole --onefile ed_spansh_helper.py
 ### Main Window
 
 ![Main Window](docs/images/main_window.png)
-
-### VR Settings
-
-![VR Settings](docs/images/vr_settings.png)
 
 ### Generated Navigation Image
 
