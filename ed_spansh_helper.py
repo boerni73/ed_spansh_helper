@@ -50,19 +50,19 @@ DEFAULT_ED_ODYSSEY_PATH = (
     r"\Products\elite-dangerous-odyssey-assets"
 )
 
-OPENVR_DLL         = "openvr_api.dll"
+OPENVR_DLL = "openvr_api.dll"
 OPENVR_DLL_STEAMVR = "openvr_api.dll.steamvr"
-OPENVR_DLL_OPENXR  = "openvr_api.dll.openxr"
+OPENVR_DLL_OPENXR = "openvr_api.dll.openxr"
 
 
 # ----------------------------------------------------------------------
 # Button color constants
 # ----------------------------------------------------------------------
-BTN_BG          = "#000000"
-BTN_BG_ACTIVE   = "#1a1a1a"
-BTN_FG_START    = "#00d26a"
-BTN_FG_PAUSE    = "#ffd700"
-BTN_FG_STOP     = "#ff3b30"
+BTN_BG = "#000000"
+BTN_BG_ACTIVE = "#1a1a1a"
+BTN_FG_START = "#00d26a"
+BTN_FG_PAUSE = "#ffd700"
+BTN_FG_STOP = "#ff3b30"
 BTN_FG_DISABLED = "#3a3a3a"
 
 
@@ -71,28 +71,30 @@ BTN_FG_DISABLED = "#3a3a3a"
 # ----------------------------------------------------------------------
 THEMES = {
     "ed_orange": {
-        "bg":              "#0a0c12",
-        "fg":              "#f0f0f5",
-        "input_bg":        "#11141b",
-        "input_fg":        "#f0f0f5",
-        "log_bg":          "#06080d",
-        "log_fg":          "#ff7300",
-        "btn_start_bg":    "#ff7300",
-        "btn_pause_bg":    "#cc5c00",
-        "btn_stop_bg":     "#8c2f00",
+        "bg": "#0a0c12",
+        "fg": "#f0f0f5",
+        "input_bg": "#11141b",
+        "input_fg": "#f0f0f5",
+        "log_bg": "#06080d",
+        "log_fg": "#ff7300",
+        "btn_start_bg": "#ff7300",
+        "btn_pause_bg": "#cc5c00",
+        "btn_stop_bg": "#8c2f00",
         "btn_disabled_bg": "#3a3a3a",
-        "btn_fg":          "#ffffff",
-        "label_fg":        "#ff8c2a",
-        "value_fg":        "#ffd6b3",
-        "accent_fg":       "#ff7300",
-        "panel_bg":        "#11141b",
-        "panel_border":    "#ff7300",
-        "lamp_true":       "#00d26a",
-        "lamp_false":      "#ff3b30",
-        "lamp_unknown":    "#808080",
-        "success_fg":      "#00d26a",
+        "btn_fg": "#ffffff",
+        "label_fg": "#ff8c2a",
+        "value_fg": "#ffd6b3",
+        "accent_fg": "#ff7300",
+        "panel_bg": "#11141b",
+        "panel_border": "#ff7300",
+        "lamp_true": "#00d26a",
+        "lamp_false": "#ff3b30",
+        "lamp_unknown": "#808080",
+        "success_fg": "#00d26a",
     }
 }
+
+
 class EdSpanshApp:
     # ------------------------------------------------------------------
     # Application lifecycle
@@ -102,6 +104,7 @@ class EdSpanshApp:
         self.root.title("Elite Dangerous - Spansh VR Navigator")
         self.root.geometry("1500x950")
         self.root.minsize(1200, 650)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.my_route = []
         self.route_index = 0
@@ -116,8 +119,7 @@ class EdSpanshApp:
             self.last_route_file,
             self.kneeboard_output_img_file,
             self.ship_builds_raw,
-            self.ed_horizons_path,
-            self.ed_odyssey_path,
+            self.vr_versions,
             self.openxr_dll_source,
         ) = self.load_settings()
 
@@ -129,46 +131,55 @@ class EdSpanshApp:
         self.apply_theme(self.current_theme_name)
         self.setup_drag_and_drop()
         self.load_last_route_on_startup()
-        self.root.after(300, self.check_vr_setup_on_startup)  # ← NEU
+        self.root.after(300, self.check_vr_setup_on_startup)
+
+    def on_close(self):
+        self.stop_requested = True
+        self.monitoring_active = False
+        self.save_settings()
+        self.root.destroy()
 
     def load_last_route_on_startup(self):
         if not self.last_route_file:
             return
+
         if not os.path.exists(self.last_route_file):
             self.log(f"Last route file not found: {self.last_route_file}")
             self.last_route_file = ""
             self.save_settings()
             return
+
         self.file_entry.delete(0, tk.END)
         self.file_entry.insert(0, self.last_route_file)
+
         if self.read_route_file():
             self.log(f"Auto-loaded last route file: {self.last_route_file}")
 
     def check_vr_setup_on_startup(self):
-        games_needing_setup = []
+        versions_needing_setup = []
 
-        for label, path in [
-            ("Elite Dangerous Horizons", self.ed_horizons_path),
-            ("Elite Dangerous Odyssey",  self.ed_odyssey_path),
-        ]:
+        for entry in self.vr_versions:
+            name = str(entry.get("name", "Unnamed Version")).strip() or "Unnamed Version"
+            path = str(entry.get("path", "")).strip()
+
             if path and os.path.isdir(path):
                 mode = self.vr_detect_mode(path)
                 if mode in ("needs_setup", "game_updated"):
-                    games_needing_setup.append(label)
+                    versions_needing_setup.append(name)
 
-        if not games_needing_setup:
+        if not versions_needing_setup:
             return
 
-        for g in games_needing_setup:
-            self.log(f"⚠  VR Setup erforderlich: {g}")
-        self.log("   → Settings > VR Mode > ⚙ Setup / Re-Setup")
+        for version_name in versions_needing_setup:
+            self.log(f"VR setup required: {version_name}")
+        self.log("Go to Settings > VR Mode and run 'Setup / Re-Setup'.")
 
-        game_list = "\n".join(f"  • {g}" for g in games_needing_setup)
+        version_list = "\n".join(f"  • {name}" for name in versions_needing_setup)
         messagebox.showwarning(
-            "VR Setup erforderlich",
-            f"Das OpenVR DLL Setup muss noch durchgeführt werden für:\n\n"
-            f"{game_list}\n\n"
-            f"Bitte unter Settings → VR Mode '⚙ Setup / Re-Setup' ausführen.",
+            "VR setup required",
+            f"The OpenVR DLL setup still needs to be completed for:\n\n"
+            f"{version_list}\n\n"
+            f"Please open Settings > VR Mode and run 'Setup / Re-Setup'.",
             parent=self.root,
         )
 
@@ -186,55 +197,142 @@ class EdSpanshApp:
         self.ui_call(self.log, message)
 
     # ------------------------------------------------------------------
-    # Settings
+    # Settings helpers
     # ------------------------------------------------------------------
+    def normalize_vr_versions(self, versions):
+        normalized = []
+
+        if not isinstance(versions, list):
+            return normalized
+
+        for item in versions:
+            if not isinstance(item, dict):
+                continue
+
+            name = str(item.get("name", "")).strip() or "Unnamed Version"
+            path = str(item.get("path", "")).strip()
+
+            normalized.append({
+                "name": name,
+                "path": path,
+            })
+
+        return normalized
+
+    def make_unique_name(self, base_name, existing_names, exclude_name=None):
+        name = str(base_name).strip() or "Unnamed Version"
+        taken = {
+            str(existing).strip()
+            for existing in existing_names
+            if str(existing).strip() and str(existing).strip() != str(exclude_name).strip()
+        }
+
+        if name not in taken:
+            return name
+
+        counter = 2
+        while True:
+            candidate = f"{name} ({counter})"
+            if candidate not in taken:
+                return candidate
+            counter += 1
+
+    def get_vr_version_names(self):
+        return [entry.get("name", "Unnamed Version") for entry in self.vr_versions]
+
+    def find_vr_version_by_name(self, name):
+        for entry in self.vr_versions:
+            if entry.get("name") == name:
+                return entry
+        return None
+
     def load_settings(self):
-        theme              = "ed_orange"
-        journal_dir        = DEFAULT_JOURNAL_DIR
-        route_file         = ""
+        theme = "ed_orange"
+        journal_dir = DEFAULT_JOURNAL_DIR
+        route_file = ""
         kneeboard_img_file = DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE
-        ship_builds        = []
-        ed_horizons_path   = DEFAULT_ED_HORIZONS_PATH
-        ed_odyssey_path    = DEFAULT_ED_ODYSSEY_PATH
-        openxr_dll_source  = ""
+        ship_builds = []
+        vr_versions = []
+        openxr_dll_source = ""
 
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                     s = json.load(f)
-                    theme              = s.get("theme",                     "ed_orange")
-                    journal_dir        = s.get("journal_dir",               DEFAULT_JOURNAL_DIR)
-                    route_file         = s.get("last_route_file",           "")
-                    ship_builds        = s.get("ship_builds",               [])
-                    kneeboard_img_file = s.get("kneeboard_output_img_file", DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE)
-                    ed_horizons_path   = s.get("ed_horizons_path",          DEFAULT_ED_HORIZONS_PATH)
-                    ed_odyssey_path    = s.get("ed_odyssey_path",           DEFAULT_ED_ODYSSEY_PATH)
-                    openxr_dll_source  = s.get("openxr_dll_source",         "")
+
+                theme = s.get("theme", "ed_orange")
+                journal_dir = s.get("journal_dir", DEFAULT_JOURNAL_DIR)
+                route_file = s.get("last_route_file", "")
+                ship_builds = s.get("ship_builds", [])
+                kneeboard_img_file = s.get(
+                    "kneeboard_output_img_file",
+                    DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE,
+                )
+                openxr_dll_source = s.get("openxr_dll_source", "")
+                vr_versions = self.normalize_vr_versions(s.get("vr_versions", []))
+
+                if not vr_versions:
+                    old_horizons = str(s.get("ed_horizons_path", "")).strip()
+                    old_odyssey = str(s.get("ed_odyssey_path", "")).strip()
+
+                    if old_horizons:
+                        vr_versions.append({
+                            "name": "Horizons",
+                            "path": old_horizons,
+                        })
+
+                    if old_odyssey:
+                        vr_versions.append({
+                            "name": "Odyssey",
+                            "path": old_odyssey,
+                        })
+
+                    if not vr_versions:
+                        if os.path.isdir(DEFAULT_ED_HORIZONS_PATH):
+                            vr_versions.append({
+                                "name": "Horizons",
+                                "path": DEFAULT_ED_HORIZONS_PATH,
+                            })
+                        if os.path.isdir(DEFAULT_ED_ODYSSEY_PATH):
+                            vr_versions.append({
+                                "name": "Odyssey",
+                                "path": DEFAULT_ED_ODYSSEY_PATH,
+                            })
+
             except Exception:
                 pass
 
         if theme not in THEMES:
             theme = "ed_orange"
 
-        return (theme, journal_dir, route_file, kneeboard_img_file,
-                ship_builds, ed_horizons_path, ed_odyssey_path, openxr_dll_source)
+        vr_versions = self.normalize_vr_versions(vr_versions)
+
+        return (
+            theme,
+            journal_dir,
+            route_file,
+            kneeboard_img_file,
+            ship_builds,
+            vr_versions,
+            openxr_dll_source,
+        )
 
     def save_settings(self):
         try:
             settings_dir = os.path.dirname(SETTINGS_FILE)
             if settings_dir:
                 os.makedirs(settings_dir, exist_ok=True)
+
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(
                     {
-                        "theme":                     self.current_theme_name,
-                        "journal_dir":               self.journal_dir,
-                        "last_route_file":           self.last_route_file,
+                        "theme": self.current_theme_name,
+                        "journal_dir": self.journal_dir,
+                        "last_route_file": self.last_route_file,
                         "kneeboard_output_img_file": self.kneeboard_output_img_file,
-                        "ship_builds":               self.ship_builds_raw,
-                        "ed_horizons_path":          self.ed_horizons_path,
-                        "ed_odyssey_path":           self.ed_odyssey_path,
-                        "openxr_dll_source":         self.openxr_dll_source,
+                        "ship_builds": self.ship_builds_raw,
+                        "vr_versions": self.vr_versions,
+                        "openxr_dll_source": self.openxr_dll_source,
                     },
                     f,
                     indent=2,
@@ -254,6 +352,7 @@ class EdSpanshApp:
         except Exception as e:
             self.log(f"Clipboard error: {e}")
             return False
+
     # ------------------------------------------------------------------
     # Widget creation
     # ------------------------------------------------------------------
@@ -261,7 +360,7 @@ class EdSpanshApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill="both", expand=True)
 
-        # ── CONTROL BUTTONS – volle Breite, ganz oben ─────────────────
+        # Full-width top control buttons
         self.btn_frame = tk.Frame(self.main_frame)
         self.btn_frame.pack(fill="x", padx=10, pady=(10, 5))
 
@@ -298,7 +397,6 @@ class EdSpanshApp:
         )
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=(2, 0))
 
-        # Trennlinie zwischen Gruppen
         self.btn_separator = tk.Frame(self.btn_frame, bg="#ff7300", width=2)
         self.btn_separator.pack(side="left", fill="y", padx=12, pady=3)
 
@@ -316,7 +414,7 @@ class EdSpanshApp:
         self.exit_btn = tk.Button(
             self.btn_frame,
             text="✕  Exit",
-            command=self.root.quit,
+            command=self.on_close,
             bg=BTN_BG, fg=BTN_FG_STOP,
             activebackground=BTN_BG_ACTIVE, activeforeground=BTN_FG_STOP,
             font=("Arial", 14, "bold"),
@@ -324,7 +422,7 @@ class EdSpanshApp:
         )
         self.exit_btn.pack(side="left", padx=(0, 0))
 
-        # ── Horizontaler Split: links Controls | rechts Log ────────────
+        # Horizontal split: left content | right log
         self.content_frame = tk.Frame(self.main_frame)
         self.content_frame.pack(fill="both", expand=True)
         self.content_frame.columnconfigure(0, weight=3)
@@ -337,7 +435,7 @@ class EdSpanshApp:
         self.right_frame = tk.Frame(self.content_frame)
         self.right_frame.grid(row=0, column=1, sticky="nsew")
 
-        # ── Spansh Tools ───────────────────────────────────────────────
+        # Spansh tools
         self.ship_build_frame = tk.LabelFrame(
             self.left_frame,
             text=" Spansh Tools ",
@@ -398,7 +496,7 @@ class EdSpanshApp:
         )
         self.copy_ship_build_btn.pack(side="left")
 
-        # ── Route Overview ─────────────────────────────────────────────
+        # Route overview
         self.route_info_frame = tk.LabelFrame(
             self.left_frame,
             text=" Route Overview ",
@@ -409,7 +507,7 @@ class EdSpanshApp:
 
         self.input_label = tk.Label(
             self.route_info_frame,
-            text="Select Spansh Route JSON File (or drop it here):",
+            text="Select a Spansh route JSON file (or drop it here):",
             font=("Arial", 10, "bold"),
         )
         self.input_label.pack(anchor="w", padx=10, pady=(10, 2))
@@ -442,7 +540,8 @@ class EdSpanshApp:
             anchor="w",
         )
         self.lbl_route_type.pack(fill="x", pady=(0, 8))
-        # ── Route Table ────────────────────────────────────────────────
+
+        # Route table
         self.route_table_frame = tk.Frame(self.route_info_frame)
         self.route_table_frame.pack(fill="both", expand=True)
 
@@ -454,19 +553,19 @@ class EdSpanshApp:
             style="Route.Treeview",
         )
 
-        self.route_table.heading("wp_no",     text="#")
-        self.route_table.heading("system",    text="System Name")
-        self.route_table.heading("distance",  text="Distance")
+        self.route_table.heading("wp_no", text="#")
+        self.route_table.heading("system", text="System Name")
+        self.route_table.heading("distance", text="Distance")
         self.route_table.heading("scoopable", text="Scoopable")
-        self.route_table.heading("neutron",   text="Neutron Star")
-        self.route_table.heading("jumps_to",  text="Jumps to Reach")
+        self.route_table.heading("neutron", text="Neutron Star")
+        self.route_table.heading("jumps_to", text="Jumps to Reach")
 
-        self.route_table.column("wp_no",     width=60,  minwidth=50,  anchor="center")
-        self.route_table.column("system",    width=350, minwidth=200, anchor="w")
-        self.route_table.column("distance",  width=100, minwidth=80,  anchor="e")
-        self.route_table.column("scoopable", width=90,  minwidth=80,  anchor="center")
-        self.route_table.column("neutron",   width=100, minwidth=90,  anchor="center")
-        self.route_table.column("jumps_to",  width=110, minwidth=90,  anchor="center")
+        self.route_table.column("wp_no", width=60, minwidth=50, anchor="center")
+        self.route_table.column("system", width=350, minwidth=200, anchor="w")
+        self.route_table.column("distance", width=100, minwidth=80, anchor="e")
+        self.route_table.column("scoopable", width=90, minwidth=80, anchor="center")
+        self.route_table.column("neutron", width=100, minwidth=90, anchor="center")
+        self.route_table.column("jumps_to", width=110, minwidth=90, anchor="center")
 
         self.route_table_scroll_y = tk.Scrollbar(
             self.route_table_frame,
@@ -494,7 +593,7 @@ class EdSpanshApp:
         self.route_table_item_ids = []
         self.route_table_row_data = []
 
-        # ── Cockpit Navigation Display ──────────────────────────────────
+        # Cockpit navigation display
         self.dash_frame = tk.LabelFrame(
             self.left_frame,
             text=" Cockpit Navigation Display ",
@@ -514,7 +613,7 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
-        # ── Log Output (rechts, volle Höhe) ───────────────────────────
+        # Log output
         self.output_label = tk.Label(
             self.right_frame,
             text="Log Output and Status:",
@@ -532,6 +631,7 @@ class EdSpanshApp:
         self.log_output.pack(fill="both", expand=True, padx=10, pady=(5, 10))
 
         self.refresh_ship_build_dropdown()
+
     def open_add_ship_build_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Ship Build")
@@ -577,15 +677,18 @@ class EdSpanshApp:
             raw_text = text_widget.get("1.0", tk.END).strip()
             if not raw_text:
                 messagebox.showwarning(
-                    "No Input", "Please paste a ship build JSON first.",
+                    "No Input",
+                    "Please paste a ship build JSON first.",
                     parent=dialog
                 )
                 return
+
             try:
                 json.loads(raw_text)
             except Exception as e:
                 messagebox.showerror(
-                    "Invalid JSON", f"Ship build JSON is invalid:\n{e}",
+                    "Invalid JSON",
+                    f"Ship build JSON is invalid:\n{e}",
                     parent=dialog
                 )
                 return
@@ -625,6 +728,121 @@ class EdSpanshApp:
             relief="flat", bd=0, padx=12, pady=4,
         ).pack(side="right")
 
+    def open_add_vr_version_dialog(self, parent, on_add_callback):
+        dialog = tk.Toplevel(parent)
+        dialog.title("Add Game Version")
+        dialog.geometry("560x220")
+        dialog.minsize(500, 220)
+        dialog.transient(parent)
+        dialog.grab_set()
+
+        t = THEMES[self.current_theme_name]
+        dialog.config(bg=t["bg"])
+
+        tk.Label(
+            dialog,
+            text="Version Name:",
+            font=("Arial", 10, "bold"),
+            bg=t["bg"], fg=t["label_fg"],
+        ).pack(anchor="w", padx=10, pady=(12, 2))
+
+        name_var = tk.StringVar()
+        name_entry = tk.Entry(
+            dialog,
+            textvariable=name_var,
+            bg=t["input_bg"], fg=t["input_fg"],
+            insertbackground=t["input_fg"],
+            font=("Consolas", 10),
+            relief="flat", bd=4,
+        )
+        name_entry.pack(fill="x", padx=10, pady=(0, 10), ipady=4)
+        name_entry.focus_set()
+
+        tk.Label(
+            dialog,
+            text="Game Path:",
+            font=("Arial", 10, "bold"),
+            bg=t["bg"], fg=t["label_fg"],
+        ).pack(anchor="w", padx=10, pady=(0, 2))
+
+        path_row = tk.Frame(dialog, bg=t["bg"])
+        path_row.pack(fill="x", padx=10, pady=(0, 10))
+
+        path_var = tk.StringVar()
+        path_entry = tk.Entry(
+            path_row,
+            textvariable=path_var,
+            bg=t["input_bg"], fg=t["input_fg"],
+            insertbackground=t["input_fg"],
+            font=("Consolas", 10),
+            relief="flat", bd=4,
+        )
+        path_entry.pack(side="left", fill="x", expand=True, ipady=4)
+
+        def browse():
+            selected = filedialog.askdirectory(
+                initialdir=os.path.expanduser("~"),
+                title="Select Game Directory",
+            )
+            if selected:
+                path_var.set(os.path.normpath(selected))
+
+        tk.Button(
+            path_row,
+            text="Browse...",
+            command=browse,
+            bg=t["btn_start_bg"], fg=t["btn_fg"],
+            activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+            relief="flat", bd=0, padx=10, pady=3,
+        ).pack(side="left", padx=(6, 0))
+
+        button_row = tk.Frame(dialog, bg=t["bg"])
+        button_row.pack(fill="x", padx=10, pady=(0, 10))
+
+        def add_version():
+            name = name_var.get().strip()
+            path = path_var.get().strip()
+
+            if not name:
+                messagebox.showwarning(
+                    "Missing Name",
+                    "Please enter a version name.",
+                    parent=dialog,
+                )
+                return
+
+            if not path:
+                messagebox.showwarning(
+                    "Missing Path",
+                    "Please select a game path.",
+                    parent=dialog,
+                )
+                return
+
+            on_add_callback({
+                "name": name,
+                "path": os.path.normpath(path),
+            })
+            dialog.destroy()
+
+        tk.Button(
+            button_row,
+            text="Cancel",
+            command=dialog.destroy,
+            bg=t["btn_stop_bg"], fg=t["btn_fg"],
+            activebackground="#aa3a00", activeforeground=t["btn_fg"],
+            relief="flat", bd=0, padx=12, pady=4,
+        ).pack(side="right", padx=(6, 0))
+
+        tk.Button(
+            button_row,
+            text="Add",
+            command=add_version,
+            bg=t["btn_start_bg"], fg=t["btn_fg"],
+            activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+            relief="flat", bd=0, padx=12, pady=4,
+        ).pack(side="right")
+
     def remove_selected_ship_build(self):
         selected_name = self.ship_build_var.get().strip()
         if not selected_name:
@@ -638,8 +856,10 @@ class EdSpanshApp:
                 break
 
         if not selected_entry:
-            messagebox.showerror("Build Not Found",
-                                 "The selected ship build could not be found.")
+            messagebox.showerror(
+                "Build Not Found",
+                "The selected ship build could not be found."
+            )
             return
 
         confirm = messagebox.askyesno(
@@ -656,6 +876,7 @@ class EdSpanshApp:
         self.save_settings()
         self.refresh_ship_build_dropdown()
         self.log(f"Deleted ship build: {selected_name}")
+
     # ------------------------------------------------------------------
     # Theme and styles
     # ------------------------------------------------------------------
@@ -715,18 +936,16 @@ class EdSpanshApp:
             darkcolor=t["panel_border"],
         )
 
-        # ── NEU: readonly-Zustand explizit stylen ──────────────────────────
         style.map(
             "Orange.TCombobox",
             fieldbackground=[("readonly", t["input_bg"])],
             foreground=[("readonly", t["input_fg"])],
-            selectbackground=[("readonly", t["input_bg"])],   # kein blauer Blob
-            selectforeground=[("readonly", t["accent_fg"])],  # Text in Orange
+            selectbackground=[("readonly", t["input_bg"])],
+            selectforeground=[("readonly", t["accent_fg"])],
         )
 
-        # ── NEU: Dropdown-Listbox stylen ───────────────────────────────────
-        self.root.option_add("*TCombobox*Listbox.background",     t["input_bg"])
-        self.root.option_add("*TCombobox*Listbox.foreground",     t["input_fg"])
+        self.root.option_add("*TCombobox*Listbox.background", t["input_bg"])
+        self.root.option_add("*TCombobox*Listbox.foreground", t["input_fg"])
         self.root.option_add("*TCombobox*Listbox.selectBackground", t["accent_fg"])
         self.root.option_add("*TCombobox*Listbox.selectForeground", "#000000")
         self.root.option_add("*TCombobox*Listbox.font", ("Arial", 10))
@@ -739,7 +958,6 @@ class EdSpanshApp:
         self.file_frame.config(bg=t["bg"])
         self.btn_frame.config(bg=t["bg"])
 
-        # ── Neue Frames ────────────────────────────────────────────────
         self.content_frame.config(bg=t["bg"])
         self.left_frame.config(bg=t["bg"])
         self.right_frame.config(bg=t["bg"])
@@ -747,7 +965,6 @@ class EdSpanshApp:
         self.input_label.config(bg=t["bg"], fg=t["label_fg"])
         self.output_label.config(bg=t["bg"], fg=t["label_fg"])
 
-        # ── Spansh Tools ───────────────────────────────────────────────
         self.ship_build_frame.config(
             bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
         )
@@ -775,14 +992,12 @@ class EdSpanshApp:
             relief="flat", bd=0,
         )
 
-        # ── Route Overview ─────────────────────────────────────────────
         self.route_info_frame.config(
             bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
         )
         self.lbl_route_type.config(bg=t["panel_bg"], fg=t["accent_fg"])
         self.route_table_frame.config(bg=t["panel_bg"])
 
-        # ── Cockpit Display ────────────────────────────────────────────
         self.dash_frame.config(
             bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
         )
@@ -793,7 +1008,6 @@ class EdSpanshApp:
                 pass
         self.dashboard_image_label.config(bg=t["panel_bg"], fg=t["accent_fg"])
 
-        # ── Inputs und Log ─────────────────────────────────────────────
         self.file_entry.config(
             bg=t["input_bg"], fg=t["input_fg"],
             insertbackground=t["input_fg"], relief="flat", bd=6,
@@ -808,7 +1022,6 @@ class EdSpanshApp:
             relief="flat", bd=0,
         )
 
-        # ── Transport Buttons ──────────────────────────────────────────
         self.start_btn.config(
             bg=BTN_BG, fg=BTN_FG_START,
             activebackground=BTN_BG_ACTIVE, activeforeground=BTN_FG_START,
@@ -825,7 +1038,6 @@ class EdSpanshApp:
             bd=3,
         )
 
-        # ── Trennlinie + Settings/Exit ─────────────────────────────────
         self.btn_separator.config(bg="#ff7300")
         self.settings_btn.config(
             bg=BTN_BG, fg="#ff7300",
@@ -838,7 +1050,6 @@ class EdSpanshApp:
             bd=3,
         )
 
-        # ── Scrollbars ─────────────────────────────────────────────────
         try:
             self.route_table_scroll_y.config(
                 bg=t["panel_bg"], activebackground=t["btn_start_bg"],
@@ -851,11 +1062,9 @@ class EdSpanshApp:
         except Exception:
             pass
 
-        # ── TTK Styles ─────────────────────────────────────────────────
         self.setup_table_style()
         self.setup_combobox_style()
 
-        # ── Route Table Tags ───────────────────────────────────────────
         try:
             self.route_table.tag_configure(
                 "current_system", background="#402200", foreground="#ffd6b3"
@@ -867,7 +1076,6 @@ class EdSpanshApp:
             pass
 
     def _update_transport_btn_states(self):
-        """Setzt relief der Transport-Buttons passend zum Zustand."""
         self.start_btn.config(
             relief="sunken" if self.monitoring_active else "raised"
         )
@@ -875,6 +1083,7 @@ class EdSpanshApp:
             relief="sunken" if self.is_paused else "raised"
         )
         self.stop_btn.config(relief="raised")
+
     # ------------------------------------------------------------------
     # Dashboard
     # ------------------------------------------------------------------
@@ -882,13 +1091,18 @@ class EdSpanshApp:
         try:
             if not os.path.exists(self.kneeboard_output_img_file):
                 return
-            img = Image.open(self.kneeboard_output_img_file)
+
+            with Image.open(self.kneeboard_output_img_file) as img:
+                img = img.copy()
+
             max_width, max_height = 700, 320
             width, height = img.size
             scale = min(max_width / width, max_height / height, 1.0)
             new_size = (int(width * scale), int(height * scale))
+
             if new_size != img.size:
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
+
             self.dashboard_photo = ImageTk.PhotoImage(img)
             self.dashboard_image_label.config(image=self.dashboard_photo, text="")
         except Exception as e:
@@ -918,6 +1132,7 @@ class EdSpanshApp:
         if file_path.startswith("{") and file_path.endswith("}"):
             file_path = file_path[1:-1]
         file_path = os.path.normpath(file_path)
+
         if file_path.lower().endswith(".json"):
             self.file_entry.delete(0, tk.END)
             self.file_entry.insert(0, file_path)
@@ -925,8 +1140,10 @@ class EdSpanshApp:
             self.save_settings()
             self.log(f"File dropped: {file_path}")
         else:
-            messagebox.showerror("Invalid File",
-                                 "Please drop a valid .json route file.")
+            messagebox.showerror(
+                "Invalid File",
+                "Please drop a valid .json route file."
+            )
 
     # ------------------------------------------------------------------
     # Browse helpers
@@ -980,8 +1197,10 @@ class EdSpanshApp:
         if selected_file:
             self.kneeboard_output_img_file = os.path.normpath(selected_file)
             self.save_settings()
-            self.log(f"Kneeboard image output file updated to: "
-                     f"{self.kneeboard_output_img_file}")
+            self.log(
+                f"Kneeboard image output file updated to: "
+                f"{self.kneeboard_output_img_file}"
+            )
 
     # ------------------------------------------------------------------
     # Route table helpers
@@ -998,17 +1217,19 @@ class EdSpanshApp:
         self.route_table_row_data = []
 
         for row in route_rows:
-            waypoint_no    = row.get("waypoint_no", "")
-            system_name    = row.get("system_name", "")
-            distance       = row.get("distance", 0.0)
-            scoopable      = row.get("scoopable", None)
-            neutron_star   = row.get("neutron_star", False)
+            waypoint_no = row.get("waypoint_no", "")
+            system_name = row.get("system_name", "")
+            distance = row.get("distance", 0.0)
+            scoopable = row.get("scoopable", None)
+            neutron_star = row.get("neutron_star", False)
             jumps_to_reach = row.get("jumps_to_reach", 0)
 
             scoopable_text = "-" if scoopable is None else ("Yes" if scoopable else "No")
-            neutron_text   = "Yes" if neutron_star else "No"
-            distance_text  = (f"{distance:.1f} LY"
-                              if isinstance(distance, (int, float)) else str(distance))
+            neutron_text = "Yes" if neutron_star else "No"
+            distance_text = (
+                f"{distance:.1f} LY"
+                if isinstance(distance, (int, float)) else str(distance)
+            )
 
             item_id = self.route_table.insert(
                 "", "end",
@@ -1019,12 +1240,12 @@ class EdSpanshApp:
             )
             self.route_table_item_ids.append(item_id)
             self.route_table_row_data.append({
-                "item_id":        item_id,
-                "waypoint_no":    waypoint_no,
-                "system_name":    str(system_name),
-                "distance":       distance,
-                "scoopable":      scoopable,
-                "neutron_star":   neutron_star,
+                "item_id": item_id,
+                "waypoint_no": waypoint_no,
+                "system_name": str(system_name),
+                "distance": distance,
+                "scoopable": scoopable,
+                "neutron_star": neutron_star,
                 "jumps_to_reach": jumps_to_reach,
             })
 
@@ -1039,9 +1260,9 @@ class EdSpanshApp:
         for item_id in self.route_table.get_children():
             self.route_table.item(item_id, tags=())
 
-        next_matches       = []
-        current_system_lc  = str(current_system).strip().lower() if current_system else ""
-        next_waypoint_lc   = str(next_waypoint).strip().lower()  if next_waypoint  else ""
+        next_matches = []
+        current_system_lc = str(current_system).strip().lower() if current_system else ""
+        next_waypoint_lc = str(next_waypoint).strip().lower() if next_waypoint else ""
 
         for idx, row in enumerate(self.route_table_row_data):
             system_name_lc = row["system_name"].strip().lower()
@@ -1052,16 +1273,17 @@ class EdSpanshApp:
                 next_matches.append(idx)
 
         if next_matches:
-            next_index           = next_matches[0]
+            next_index = next_matches[0]
             visible_target_index = max(0, next_index - 2)
-            total_rows           = len(self.route_table_row_data)
+            total_rows = len(self.route_table_row_data)
             if total_rows > 0:
                 self.route_table.yview_moveto(visible_target_index / total_rows)
             next_item_id = self.route_table_row_data[next_index]["item_id"]
             self.route_table.selection_set(next_item_id)
             self.route_table.focus(next_item_id)
+
     # ------------------------------------------------------------------
-    # Spansh / Ship Build helpers
+    # Spansh / ship build helpers
     # ------------------------------------------------------------------
     def open_spansh_website(self):
         try:
@@ -1094,12 +1316,19 @@ class EdSpanshApp:
             self.ship_builds.append({"name": ship_name, "raw": raw})
 
     def refresh_ship_build_dropdown(self):
+        previous_selection = self.ship_build_var.get().strip()
+
         self.rebuild_ship_build_index()
         names = [entry["name"] for entry in self.ship_builds]
         self.ship_build_dropdown["values"] = names
+
         if names:
-            self.ship_build_var.set(names[0])
-            self.ship_build_dropdown.current(0)  # ← NEU: visuell vorauswählen
+            if previous_selection in names:
+                self.ship_build_var.set(previous_selection)
+                self.ship_build_dropdown.current(names.index(previous_selection))
+            else:
+                self.ship_build_var.set(names[0])
+                self.ship_build_dropdown.current(0)
         else:
             self.ship_build_var.set("")
 
@@ -1108,13 +1337,17 @@ class EdSpanshApp:
         if not selected_name:
             messagebox.showwarning("No Selection", "Please select a ship build first.")
             return
+
         for entry in self.ship_builds:
             if entry["name"] == selected_name:
                 if self.copy_to_clipboard(entry["raw"]):
                     self.log(f"Copied ship build to clipboard: {selected_name}")
                 return
-        messagebox.showerror("Build Not Found",
-                             "The selected ship build could not be found.")
+
+        messagebox.showerror(
+            "Build Not Found",
+            "The selected ship build could not be found."
+        )
 
     # ------------------------------------------------------------------
     # Route parsing
@@ -1130,12 +1363,12 @@ class EdSpanshApp:
                 if not system_name:
                     continue
                 route_rows.append({
-                    "waypoint_no":    i + 1,
-                    "system_name":    str(system_name),
-                    "distance":       float(item.get("distance", 0.0) or 0.0),
-                    "scoopable":      None if item.get("is_scoopable") is None
-                                      else bool(item.get("is_scoopable")),
-                    "neutron_star":   bool(item.get("has_neutron", False)),
+                    "waypoint_no": i + 1,
+                    "system_name": str(system_name),
+                    "distance": float(item.get("distance", 0.0) or 0.0),
+                    "scoopable": None if item.get("is_scoopable") is None
+                                 else bool(item.get("is_scoopable")),
+                    "neutron_star": bool(item.get("has_neutron", False)),
                     "jumps_to_reach": i,
                 })
 
@@ -1147,14 +1380,14 @@ class EdSpanshApp:
                 system_name = item.get("system")
                 if not system_name:
                     continue
-                jumps_this_leg   = int(item.get("jumps", 0) or 0)
+                jumps_this_leg = int(item.get("jumps", 0) or 0)
                 cumulative_jumps = 0 if i == 0 else cumulative_jumps + jumps_this_leg
                 route_rows.append({
-                    "waypoint_no":    i + 1,
-                    "system_name":    str(system_name),
-                    "distance":       float(item.get("distance_jumped", 0.0) or 0.0),
-                    "scoopable":      None,
-                    "neutron_star":   bool(item.get("neutron_star", False)),
+                    "waypoint_no": i + 1,
+                    "system_name": str(system_name),
+                    "distance": float(item.get("distance_jumped", 0.0) or 0.0),
+                    "scoopable": None,
+                    "neutron_star": bool(item.get("neutron_star", False)),
                     "jumps_to_reach": cumulative_jumps,
                 })
 
@@ -1163,28 +1396,34 @@ class EdSpanshApp:
             for i, item in enumerate(raw_jumps):
                 if not isinstance(item, dict):
                     continue
-                system_name = (item.get("name") or item.get("system")
-                               or item.get("system_name"))
+                system_name = (
+                    item.get("name") or item.get("system") or item.get("system_name")
+                )
                 if not system_name:
                     continue
                 distance = item.get("distance", 0.0)
                 if "distance_to_star" in item and (distance == 0.0 or distance is None):
                     distance = item.get("distance_to_star", 0.0)
-                distance  = float(distance or 0.0)
+                distance = float(distance or 0.0)
                 scoopable = item.get("is_scoopable", item.get("scoopable", None))
                 neutron_star = item.get("has_neutron", False)
-                if (item.get("neutron_star") or item.get("star_type") == "N"
-                        or item.get("star_class") == "N"):
+                if (
+                    item.get("neutron_star")
+                    or item.get("star_type") == "N"
+                    or item.get("star_class") == "N"
+                ):
                     neutron_star = True
-                jumps_this_leg   = int(item.get("jumps", 1) or 1)
-                cumulative_jumps = (0 if i == 0 and distance == 0
-                                    else cumulative_jumps + jumps_this_leg)
+                jumps_this_leg = int(item.get("jumps", 1) or 1)
+                cumulative_jumps = (
+                    0 if i == 0 and distance == 0
+                    else cumulative_jumps + jumps_this_leg
+                )
                 route_rows.append({
-                    "waypoint_no":    i + 1,
-                    "system_name":    str(system_name),
-                    "distance":       distance,
-                    "scoopable":      None if scoopable is None else bool(scoopable),
-                    "neutron_star":   bool(neutron_star),
+                    "waypoint_no": i + 1,
+                    "system_name": str(system_name),
+                    "distance": distance,
+                    "scoopable": None if scoopable is None else bool(scoopable),
+                    "neutron_star": bool(neutron_star),
                     "jumps_to_reach": cumulative_jumps,
                 })
 
@@ -1194,7 +1433,8 @@ class EdSpanshApp:
         file_path = self.file_entry.get().strip()
         if not file_path or not os.path.exists(file_path):
             messagebox.showerror(
-                "Error", "Please select or drop a valid existing route JSON file first!"
+                "Error",
+                "Please select or drop a valid existing route JSON file first!"
             )
             return False
 
@@ -1202,92 +1442,104 @@ class EdSpanshApp:
             with open(file_path, "r", encoding="utf-8") as f:
                 route_data = json.load(f)
 
-            raw_jumps  = []
+            raw_jumps = []
             route_type = "Unknown Spansh Route"
 
             if "result" in route_data and "jumps" in route_data["result"]:
-                raw_jumps  = route_data["result"]["jumps"]
+                raw_jumps = route_data["result"]["jumps"]
                 route_type = "Galaxy Plotter"
             elif "result" in route_data and "system_jumps" in route_data["result"]:
-                raw_jumps  = route_data["result"]["system_jumps"]
+                raw_jumps = route_data["result"]["system_jumps"]
                 route_type = "Neutron Plotter"
             elif "jumps" in route_data:
-                raw_jumps  = route_data["jumps"]
+                raw_jumps = route_data["jumps"]
                 route_type = "Standard Jump Route"
             elif "systems" in route_data:
-                raw_jumps  = route_data["systems"]
+                raw_jumps = route_data["systems"]
                 route_type = "Road to Riches / Exobiology"
             elif "result" in route_data and "systems" in route_data["result"]:
-                raw_jumps  = route_data["result"]["systems"]
+                raw_jumps = route_data["result"]["systems"]
                 route_type = "Road to Riches / Exobiology (API)"
             elif "route" in route_data:
-                raw_jumps  = route_data["route"]
+                raw_jumps = route_data["route"]
                 route_type = "Fleet Carrier Route"
             else:
                 raise ValueError(
-                    "Unknown Spansh JSON structure. Could not find jumps or systems list."
+                    "Unknown Spansh JSON structure. Could not find a jumps or systems list."
                 )
 
             parsed_route = []
             for item in raw_jumps:
                 if not isinstance(item, dict):
                     continue
-                name = (item.get("name") or item.get("system")
-                        or item.get("system_name"))
+
+                name = (
+                    item.get("name") or item.get("system") or item.get("system_name")
+                )
                 if not name:
                     continue
+
                 distance = item.get("distance", 0.0)
                 if "distance_to_star" in item and (distance == 0.0 or distance is None):
                     distance = item.get("distance_to_star", 0.0)
                 if "distance_jumped" in item and (distance == 0.0 or distance is None):
                     distance = item.get("distance_jumped", 0.0)
+
                 is_scoopable = item.get("is_scoopable", item.get("scoopable", None))
-                has_neutron  = item.get("has_neutron", False)
-                if (item.get("neutron_star") or item.get("star_type") == "N"
-                        or item.get("star_class") == "N"):
+                has_neutron = item.get("has_neutron", False)
+                if (
+                    item.get("neutron_star")
+                    or item.get("star_type") == "N"
+                    or item.get("star_class") == "N"
+                ):
                     has_neutron = True
+
                 parsed_route.append({
-                    "name":        str(name),
+                    "name": str(name),
                     "is_scoopable": None if is_scoopable is None else bool(is_scoopable),
                     "has_neutron": bool(has_neutron),
-                    "distance":    float(distance or 0.0),
-                    "x":           float(item.get("x", 0.0) or 0.0),
-                    "y":           float(item.get("y", 0.0) or 0.0),
-                    "z":           float(item.get("z", 0.0) or 0.0),
+                    "distance": float(distance or 0.0),
+                    "x": float(item.get("x", 0.0) or 0.0),
+                    "y": float(item.get("y", 0.0) or 0.0),
+                    "z": float(item.get("z", 0.0) or 0.0),
                 })
 
             if not parsed_route:
                 raise ValueError("No valid systems could be parsed from the file.")
 
-            self.my_route        = parsed_route
-            self.route_index     = 0
+            self.my_route = parsed_route
+            self.route_index = 0
             self.last_route_file = file_path
 
             route_rows = self.build_route_table_data(route_type, raw_jumps)
             self.populate_route_table(route_rows, route_type=route_type)
 
         except Exception as e:
-            messagebox.showerror("JSON Error",
-                                 f"Failed to read or parse the JSON file:\n{e}")
+            messagebox.showerror(
+                "JSON Error",
+                f"Failed to read or parse the JSON file:\n{e}"
+            )
             return False
 
-        self.log(f"Successfully loaded and standardized {route_type} "
-                 f"with {len(self.my_route)} route entries.")
+        self.log(
+            f"Successfully loaded and standardized {route_type} "
+            f"with {len(self.my_route)} route entries."
+        )
         self.save_settings()
         return True
+
     # ------------------------------------------------------------------
-    # Settings Dialog
+    # Settings dialog
     # ------------------------------------------------------------------
     def open_settings_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Settings")
-        dialog.geometry("680x580")
-        dialog.minsize(600, 520)
+        dialog.geometry("760x620")
+        dialog.minsize(680, 560)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.config(bg="#000000")
 
-        # ── Notebook-Style ─────────────────────────────────────────────
         style = ttk.Style()
         style.configure(
             "Settings.TNotebook",
@@ -1311,15 +1563,14 @@ class EdSpanshApp:
         notebook = ttk.Notebook(dialog, style="Settings.TNotebook")
         notebook.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
-        # ══════════════════════════════════════════════════════════════
+        # ==============================================================
         # Tab 1: File Locations
-        # ══════════════════════════════════════════════════════════════
+        # ==============================================================
         tab_files = tk.Frame(notebook, bg="#000000")
         notebook.add(tab_files, text="  File Locations  ")
         tab_files.columnconfigure(0, weight=1)
         tab_files.columnconfigure(1, weight=0)
 
-        # Journal Directory
         tk.Label(
             tab_files,
             text="ED Journal Directory:",
@@ -1352,7 +1603,6 @@ class EdSpanshApp:
             font=("Arial", 9, "bold"),
         ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
 
-        # Kneeboard Output File
         tk.Label(
             tab_files,
             text="Kneeboard Image Output File:",
@@ -1370,10 +1620,14 @@ class EdSpanshApp:
         ).grid(row=3, column=0, sticky="ew", padx=(12, 4), pady=(0, 8), ipady=4)
 
         def browse_kneeboard():
-            initial_dir  = (os.path.dirname(kneeboard_var.get())
-                            if kneeboard_var.get() else os.path.expanduser("~"))
-            initial_file = (os.path.basename(kneeboard_var.get())
-                            if kneeboard_var.get() else "vr_navigation.png")
+            initial_dir = (
+                os.path.dirname(kneeboard_var.get())
+                if kneeboard_var.get() else os.path.expanduser("~")
+            )
+            initial_file = (
+                os.path.basename(kneeboard_var.get())
+                if kneeboard_var.get() else "vr_navigation.png"
+            )
             selected = filedialog.asksaveasfilename(
                 initialdir=initial_dir,
                 initialfile=initial_file,
@@ -1392,21 +1646,22 @@ class EdSpanshApp:
             font=("Arial", 9, "bold"),
         ).grid(row=3, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
 
-        # ══════════════════════════════════════════════════════════════
+        # ==============================================================
         # Tab 2: VR Mode
-        # ══════════════════════════════════════════════════════════════
+        # ==============================================================
         tab_vr = tk.Frame(notebook, bg="#000000")
         notebook.add(tab_vr, text="  VR Mode  ")
         tab_vr.columnconfigure(0, weight=1)
         tab_vr.columnconfigure(1, weight=0)
+        tab_vr.columnconfigure(2, weight=0)
+        tab_vr.columnconfigure(3, weight=0)
 
-        # ── OpenXR DLL Source (global, gilt für beide Spiele) ──────────
         tk.Label(
             tab_vr,
-            text="OpenXR DLL Source  (vom Benutzer heruntergeladen):",
+            text="OpenXR DLL Source (downloaded by the user):",
             bg="#000000", fg="#ff7300",
             font=("Arial", 10, "bold"), anchor="w",
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(12, 2))
+        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=12, pady=(12, 2))
 
         openxr_source_var = tk.StringVar(value=self.openxr_dll_source)
 
@@ -1416,12 +1671,18 @@ class EdSpanshApp:
             bg="#1a1a1a", fg="#ff7300",
             insertbackground="#ff7300",
             font=("Consolas", 9), relief="flat", bd=4,
-        ).grid(row=1, column=0, sticky="ew", padx=(12, 4), pady=(0, 4), ipady=4)
+        ).grid(
+            row=1, column=0, columnspan=3,
+            sticky="ew", padx=(12, 4), pady=(0, 4), ipady=4
+        )
 
         def browse_openxr_source():
             selected = filedialog.askopenfilename(
-                initialdir=(os.path.dirname(openxr_source_var.get())
-                            if openxr_source_var.get() else os.path.expanduser("~")),
+                initialdir=(
+                    os.path.dirname(openxr_source_var.get())
+                    if openxr_source_var.get()
+                    else os.path.expanduser("~")
+                ),
                 title="Select OpenXR DLL",
                 filetypes=[("DLL Files", "*.dll"), ("All Files", "*.*")],
             )
@@ -1434,170 +1695,404 @@ class EdSpanshApp:
             activebackground="#1a1a1a", activeforeground="#ffaa44",
             relief="flat", bd=2, padx=10, pady=3,
             font=("Arial", 9, "bold"),
-        ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=(0, 4))
+        ).grid(row=1, column=3, sticky="ew", padx=(0, 12), pady=(0, 4))
 
-        # Trennlinie
         tk.Frame(tab_vr, bg="#ff7300", height=1).grid(
-            row=2, column=0, columnspan=2, sticky="ew", padx=12, pady=(4, 0)
+            row=2, column=0, columnspan=4, sticky="ew", padx=12, pady=(4, 8)
         )
 
-        # ── Hilfsfunktion: Sektion pro Spiel ──────────────────────────
-        status_labels  = {}
-        setup_buttons  = {}
+        vr_versions_tmp = [dict(item) for item in self.vr_versions]
+        selected_vr_var = tk.StringVar()
+        version_name_var = tk.StringVar()
+        version_path_var = tk.StringVar()
+        status_var = tk.StringVar(value="No stored game version")
+        current_loaded_name = {"value": None}
+        ignore_name_focus = {"value": False}
+        ignore_path_focus = {"value": False}
 
-        def make_game_section(parent, row_offset, label_text, path_var, status_var):
+        tk.Label(
+            tab_vr,
+            text="Stored Game Versions:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=3, column=0, sticky="w", padx=12, pady=(0, 2))
 
-            def refresh_status(pv=path_var, sv=status_var):
-                mode = self.vr_detect_mode(pv.get())
-                sv.set(self.vr_mode_label(mode))
-                status_labels[id(sv)].config(fg=self.vr_mode_color(mode))
-                if mode in ("needs_setup", "game_updated"):
-                    setup_buttons[id(sv)].pack(side="left", padx=(0, 10))
-                else:
-                    setup_buttons[id(sv)].pack_forget()
+        vr_dropdown = ttk.Combobox(
+            tab_vr,
+            textvariable=selected_vr_var,
+            state="readonly",
+            style="Orange.TCombobox",
+            width=36,
+        )
+        vr_dropdown.grid(row=4, column=0, sticky="ew", padx=(12, 4), pady=(0, 8))
 
-            # Spiel-Titel
-            tk.Label(
-                parent, text=label_text,
-                bg="#000000", fg="#ff7300",
-                font=("Arial", 10, "bold"), anchor="w",
-            ).grid(row=row_offset, column=0, columnspan=2, sticky="w",
-                   padx=12, pady=(10, 2))
+        tk.Button(
+            tab_vr,
+            text="+",
+            command=lambda: self.open_add_vr_version_dialog(dialog, add_vr_version),
+            bg="#ff7300", fg="#000000",
+            activebackground="#cc5c00", activeforeground="#000000",
+            relief="flat", bd=2, padx=12, pady=3,
+            font=("Arial", 10, "bold"),
+        ).grid(row=4, column=1, sticky="ew", padx=(0, 4), pady=(0, 8))
 
-            # Pfad-Entry
-            tk.Entry(
-                parent, textvariable=path_var,
-                bg="#1a1a1a", fg="#ff7300",
-                insertbackground="#ff7300",
-                font=("Consolas", 9), relief="flat", bd=4,
-            ).grid(row=row_offset + 1, column=0, sticky="ew",
-                   padx=(12, 4), pady=(0, 4), ipady=4)
+        tk.Button(
+            tab_vr,
+            text="-",
+            command=lambda: remove_vr_version(),
+            bg="#8c2f00", fg="#ffffff",
+            activebackground="#aa3a00", activeforeground="#ffffff",
+            relief="flat", bd=2, padx=12, pady=3,
+            font=("Arial", 10, "bold"),
+        ).grid(row=4, column=2, sticky="ew", padx=(0, 12), pady=(0, 8))
 
-            def browse_game(pv=path_var, sv=status_var):
-                selected = filedialog.askdirectory(
-                    initialdir=(pv.get() if os.path.isdir(pv.get())
-                                else os.path.expanduser("~")),
-                    title="Select Elite Dangerous Game Directory",
-                )
-                if selected:
-                    pv.set(os.path.normpath(selected))
-                    refresh_status(pv, sv)
+        tk.Label(
+            tab_vr,
+            text="Version Name:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=5, column=0, columnspan=4, sticky="w", padx=12, pady=(0, 2))
 
-            tk.Button(
-                parent, text="Browse...", command=browse_game,
-                bg="#000000", fg="#ff7300",
-                activebackground="#1a1a1a", activeforeground="#ffaa44",
-                relief="flat", bd=2, padx=10, pady=3,
-                font=("Arial", 9, "bold"),
-            ).grid(row=row_offset + 1, column=1, sticky="ew",
-                   padx=(0, 12), pady=(0, 4))
+        version_name_entry = tk.Entry(
+            tab_vr,
+            textvariable=version_name_var,
+            bg="#1a1a1a", fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9), relief="flat", bd=4,
+        )
+        version_name_entry.grid(
+            row=6, column=0, columnspan=4,
+            sticky="ew", padx=12, pady=(0, 8), ipady=4
+        )
 
-            # Status-Label
-            mode = self.vr_detect_mode(path_var.get())
+        tk.Label(
+            tab_vr,
+            text="Game Path:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=7, column=0, columnspan=4, sticky="w", padx=12, pady=(0, 2))
+
+        version_path_entry = tk.Entry(
+            tab_vr,
+            textvariable=version_path_var,
+            bg="#1a1a1a", fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9), relief="flat", bd=4,
+        )
+        version_path_entry.grid(
+            row=8, column=0, columnspan=3,
+            sticky="ew", padx=(12, 4), pady=(0, 4), ipady=4
+        )
+
+        def get_entry_by_name(name):
+            for item in vr_versions_tmp:
+                if item.get("name") == name:
+                    return item
+            return None
+
+        def set_vr_controls_enabled(enabled):
+            state = "normal" if enabled else "disabled"
+            try:
+                version_name_entry.config(state=state)
+                version_path_entry.config(state=state)
+                browse_game_path_btn.config(state=state)
+                setup_btn.config(state=state)
+                steamvr_btn.config(state=state)
+                openxr_btn.config(state=state)
+            except Exception:
+                pass
+
+        def update_status(path):
+            mode = self.vr_detect_mode(path)
             status_var.set(self.vr_mode_label(mode))
-            lbl = tk.Label(
-                parent, textvariable=status_var,
-                bg="#000000", fg=self.vr_mode_color(mode),
-                font=("Consolas", 10, "bold"), anchor="w",
+            status_label.config(fg=self.vr_mode_color(mode))
+
+        def refresh_vr_dropdown(select_name=None):
+            names = [item.get("name", "Unnamed Version") for item in vr_versions_tmp]
+            vr_dropdown["values"] = names
+
+            if not names:
+                selected_vr_var.set("")
+                current_loaded_name["value"] = None
+                ignore_name_focus["value"] = True
+                ignore_path_focus["value"] = True
+                version_name_var.set("")
+                version_path_var.set("")
+                ignore_name_focus["value"] = False
+                ignore_path_focus["value"] = False
+                status_var.set("No stored game version")
+                status_label.config(fg="#808080")
+                set_vr_controls_enabled(False)
+                return
+
+            target_name = select_name if select_name in names else names[0]
+            selected_vr_var.set(target_name)
+            vr_dropdown.current(names.index(target_name))
+            load_selected_version()
+
+        def load_selected_version(event=None):
+            selected_name = selected_vr_var.get().strip()
+            entry = get_entry_by_name(selected_name)
+
+            if not entry:
+                current_loaded_name["value"] = None
+                ignore_name_focus["value"] = True
+                ignore_path_focus["value"] = True
+                version_name_var.set("")
+                version_path_var.set("")
+                ignore_name_focus["value"] = False
+                ignore_path_focus["value"] = False
+                status_var.set("No game version selected")
+                status_label.config(fg="#808080")
+                set_vr_controls_enabled(False)
+                return
+
+            current_loaded_name["value"] = entry["name"]
+
+            ignore_name_focus["value"] = True
+            ignore_path_focus["value"] = True
+            version_name_var.set(entry.get("name", ""))
+            version_path_var.set(entry.get("path", ""))
+            ignore_name_focus["value"] = False
+            ignore_path_focus["value"] = False
+
+            update_status(entry.get("path", ""))
+            set_vr_controls_enabled(True)
+
+        def apply_name_field(event=None):
+            if ignore_name_focus["value"]:
+                return
+
+            old_name = current_loaded_name["value"]
+            if not old_name:
+                return
+
+            entry = get_entry_by_name(old_name)
+            if not entry:
+                return
+
+            existing_names = [item.get("name", "") for item in vr_versions_tmp]
+            new_name = self.make_unique_name(
+                version_name_var.get().strip(),
+                existing_names,
+                exclude_name=old_name,
             )
-            lbl.grid(row=row_offset + 2, column=0, columnspan=2,
-                     sticky="w", padx=16, pady=(0, 2))
-            status_labels[id(status_var)] = lbl
 
-            # Action-Buttons Zeile
-            action_row = tk.Frame(parent, bg="#000000")
-            action_row.grid(row=row_offset + 3, column=0, columnspan=2,
-                            sticky="w", padx=12, pady=(0, 6))
+            entry["name"] = new_name
+            current_loaded_name["value"] = new_name
+            version_name_var.set(new_name)
+            refresh_vr_dropdown(select_name=new_name)
 
-            def do_setup(pv=path_var, sv=status_var):
-                ok, msg = self.vr_do_setup(pv.get(), openxr_source_var.get())
-                self.log(msg)
-                refresh_status(pv, sv)
-                if ok:
-                    messagebox.showinfo("VR Setup", msg, parent=dialog)
-                else:
-                    messagebox.showerror("VR Setup Fehler", msg, parent=dialog)
+        def apply_path_field(event=None):
+            if ignore_path_focus["value"]:
+                return
 
-            def apply_mode(target, pv=path_var, sv=status_var):
-                ok, msg = self.vr_switch(pv.get(), target)
-                self.log(msg)
-                refresh_status(pv, sv)
-                if ok:
-                    messagebox.showinfo("VR Mode", msg, parent=dialog)
-                else:
-                    messagebox.showerror("VR Mode Fehler", msg, parent=dialog)
+            current_name = current_loaded_name["value"]
+            if not current_name:
+                return
 
-            # Setup-Button (nur sichtbar wenn needs_setup / game_updated)
-            setup_btn = tk.Button(
-                action_row, text="⚙ Setup / Re-Setup",
-                command=do_setup,
-                bg="#ff7300", fg="#000000",
-                activebackground="#cc5c00", activeforeground="#000000",
-                relief="flat", bd=2, padx=10, pady=3,
-                font=("Arial", 9, "bold"),
+            entry = get_entry_by_name(current_name)
+            if not entry:
+                return
+
+            raw_path = version_path_var.get().strip()
+            normalized_path = os.path.normpath(raw_path) if raw_path else ""
+            entry["path"] = normalized_path
+            version_path_var.set(normalized_path)
+            update_status(normalized_path)
+
+        def add_vr_version(data):
+            existing_names = [item.get("name", "") for item in vr_versions_tmp]
+            unique_name = self.make_unique_name(data.get("name", ""), existing_names)
+            path = os.path.normpath(data.get("path", "").strip())
+
+            vr_versions_tmp.append({
+                "name": unique_name,
+                "path": path,
+            })
+            refresh_vr_dropdown(select_name=unique_name)
+
+        def remove_vr_version():
+            selected_name = selected_vr_var.get().strip()
+            if not selected_name:
+                messagebox.showwarning(
+                    "No Selection",
+                    "Please select a stored game version first.",
+                    parent=dialog,
+                )
+                return
+
+            entry = get_entry_by_name(selected_name)
+            if not entry:
+                messagebox.showerror(
+                    "Version Not Found",
+                    "The selected game version could not be found.",
+                    parent=dialog,
+                )
+                return
+
+            confirm = messagebox.askyesno(
+                "Delete Game Version",
+                f"Do you really want to delete the game version '{selected_name}'?",
+                parent=dialog,
             )
-            setup_btn.pack(side="left", padx=(0, 10))
-            setup_buttons[id(status_var)] = setup_btn
+            if not confirm:
+                return
 
-            # Initiale Sichtbarkeit Setup-Button
-            if mode in ("needs_setup", "game_updated"):
-                setup_btn.pack(side="left", padx=(0, 10))
+            index = vr_versions_tmp.index(entry)
+            del vr_versions_tmp[index]
+
+            if vr_versions_tmp:
+                next_index = min(index, len(vr_versions_tmp) - 1)
+                refresh_vr_dropdown(select_name=vr_versions_tmp[next_index]["name"])
             else:
-                setup_btn.pack_forget()
+                refresh_vr_dropdown()
 
-            tk.Button(
-                action_row, text="→ SteamVR / OpenVR",
-                command=lambda: apply_mode("steamvr"),
-                bg="#000000", fg="#ffd700",
-                activebackground="#1a1a1a", activeforeground="#ffe566",
-                relief="flat", bd=2, padx=10, pady=3,
-                font=("Arial", 9, "bold"),
-            ).pack(side="left", padx=(0, 6))
+        def browse_selected_game_path():
+            selected_name = selected_vr_var.get().strip()
+            if not selected_name:
+                messagebox.showwarning(
+                    "No Selection",
+                    "Please select a stored game version first.",
+                    parent=dialog,
+                )
+                return
 
-            tk.Button(
-                action_row, text="→ OpenXR",
-                command=lambda: apply_mode("openxr"),
-                bg="#000000", fg="#00d26a",
-                activebackground="#1a1a1a", activeforeground="#33ff88",
-                relief="flat", bd=2, padx=10, pady=3,
-                font=("Arial", 9, "bold"),
-            ).pack(side="left")
+            current_path = version_path_var.get().strip()
+            initialdir = (
+                current_path if os.path.isdir(current_path)
+                else os.path.expanduser("~")
+            )
 
-        # ── Sektionen für beide Spiele ─────────────────────────────────
-        horizons_path_var   = tk.StringVar(value=self.ed_horizons_path)
-        horizons_status_var = tk.StringVar()
-        odyssey_path_var    = tk.StringVar(value=self.ed_odyssey_path)
-        odyssey_status_var  = tk.StringVar()
+            selected = filedialog.askdirectory(
+                initialdir=initialdir,
+                title="Select Elite Dangerous Game Directory",
+                parent=dialog,
+            )
+            if selected:
+                version_path_var.set(os.path.normpath(selected))
+                apply_path_field()
 
-        make_game_section(tab_vr, 3,  "Elite Dangerous Horizons:",
-                          horizons_path_var, horizons_status_var)
-
-        tk.Frame(tab_vr, bg="#333333", height=1).grid(
-            row=7, column=0, columnspan=2, sticky="ew", padx=12, pady=2
+        browse_game_path_btn = tk.Button(
+            tab_vr,
+            text="Browse...",
+            command=browse_selected_game_path,
+            bg="#000000", fg="#ff7300",
+            activebackground="#1a1a1a", activeforeground="#ffaa44",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
         )
+        browse_game_path_btn.grid(row=8, column=3, sticky="ew", padx=(0, 12), pady=(0, 4))
 
-        make_game_section(tab_vr, 8,  "Elite Dangerous Odyssey:",
-                          odyssey_path_var, odyssey_status_var)
+        tk.Label(
+            tab_vr,
+            text="Status:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=9, column=0, columnspan=4, sticky="w", padx=12, pady=(4, 2))
 
-        # ══════════════════════════════════════════════════════════════
-        # Save / Cancel
-        # ══════════════════════════════════════════════════════════════
+        status_label = tk.Label(
+            tab_vr,
+            textvariable=status_var,
+            bg="#000000", fg="#808080",
+            font=("Consolas", 10, "bold"), anchor="w",
+        )
+        status_label.grid(row=10, column=0, columnspan=4, sticky="w", padx=16, pady=(0, 6))
+
+        action_row = tk.Frame(tab_vr, bg="#000000")
+        action_row.grid(row=11, column=0, columnspan=4, sticky="w", padx=12, pady=(2, 10))
+
+        def run_setup():
+            apply_path_field()
+            current_name = current_loaded_name["value"]
+            entry = get_entry_by_name(current_name)
+            if not entry:
+                return
+
+            ok, msg = self.vr_do_setup(entry.get("path", ""), openxr_source_var.get().strip())
+            self.log(f"{current_name}: {msg}")
+            update_status(entry.get("path", ""))
+
+            if ok:
+                messagebox.showinfo("VR Setup", msg, parent=dialog)
+            else:
+                messagebox.showerror("VR Setup Error", msg, parent=dialog)
+
+        def switch_vr_mode(target_mode):
+            apply_path_field()
+            current_name = current_loaded_name["value"]
+            entry = get_entry_by_name(current_name)
+            if not entry:
+                return
+
+            ok, msg = self.vr_switch(entry.get("path", ""), target_mode)
+            self.log(f"{current_name}: {msg}")
+            update_status(entry.get("path", ""))
+
+            if ok:
+                messagebox.showinfo("VR Mode", msg, parent=dialog)
+            else:
+                messagebox.showerror("VR Mode Error", msg, parent=dialog)
+
+        setup_btn = tk.Button(
+            action_row, text="Setup / Re-Setup",
+            command=run_setup,
+            bg="#ff7300", fg="#000000",
+            activebackground="#cc5c00", activeforeground="#000000",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
+        )
+        setup_btn.pack(side="left", padx=(0, 10))
+
+        steamvr_btn = tk.Button(
+            action_row, text="→ SteamVR / OpenVR",
+            command=lambda: switch_vr_mode("steamvr"),
+            bg="#000000", fg="#ffd700",
+            activebackground="#1a1a1a", activeforeground="#ffe566",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
+        )
+        steamvr_btn.pack(side="left", padx=(0, 6))
+
+        openxr_btn = tk.Button(
+            action_row, text="→ OpenXR",
+            command=lambda: switch_vr_mode("openxr"),
+            bg="#000000", fg="#00d26a",
+            activebackground="#1a1a1a", activeforeground="#33ff88",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
+        )
+        openxr_btn.pack(side="left")
+
+        vr_dropdown.bind("<<ComboboxSelected>>", load_selected_version)
+        version_name_entry.bind("<FocusOut>", apply_name_field)
+        version_name_entry.bind("<Return>", apply_name_field)
+        version_path_entry.bind("<FocusOut>", apply_path_field)
+        version_path_entry.bind("<Return>", apply_path_field)
+
+        refresh_vr_dropdown()
+
+        # ==============================================================
+        # Bottom buttons
+        # ==============================================================
         btn_row_main = tk.Frame(dialog, bg="#000000")
         btn_row_main.pack(fill="x", padx=10, pady=(0, 10))
 
         def save_and_close():
-            self.journal_dir               = journal_var.get().strip()
+            apply_name_field()
+            apply_path_field()
+
+            self.journal_dir = journal_var.get().strip()
             self.kneeboard_output_img_file = kneeboard_var.get().strip()
-            self.ed_horizons_path          = horizons_path_var.get().strip()
-            self.ed_odyssey_path           = odyssey_path_var.get().strip()
             self.openxr_dll_source = openxr_source_var.get().strip()
+            self.vr_versions = self.normalize_vr_versions(vr_versions_tmp)
 
             self.save_settings()
-            self.log("Settings gespeichert.")
-            self.log(f"  Journal Dir  : {self.journal_dir}")
-            self.log(f"  Kneeboard    : {self.kneeboard_output_img_file}")
-            self.log(f"  ED Horizons  : {self.ed_horizons_path}")
-            self.log(f"  ED Odyssey   : {self.ed_odyssey_path}")
+            self.log("Settings saved.")
+            self.log(f"  Journal Dir : {self.journal_dir}")
+            self.log(f"  Kneeboard   : {self.kneeboard_output_img_file}")
+            self.log(f"  OpenXR DLL  : {self.openxr_dll_source}")
+            self.log(f"  VR Versions : {len(self.vr_versions)}")
             dialog.destroy()
 
         tk.Button(
@@ -1619,10 +2114,9 @@ class EdSpanshApp:
         ).pack(side="right")
 
     # ------------------------------------------------------------------
-    # VR Mode helpers
+    # VR mode helpers
     # ------------------------------------------------------------------
     def vr_md5(self, file_path):
-        """MD5-Hash einer Datei, None bei Fehler."""
         try:
             h = hashlib.md5()
             with open(file_path, "rb") as f:
@@ -1634,26 +2128,27 @@ class EdSpanshApp:
 
     def vr_detect_mode(self, game_path):
         """
-        Erkennt den aktiven VR-Modus anhand MD5-Vergleich.
-        Rückgabe:
-          'steamvr'      – aktive dll == .steamvr Backup
-          'openxr'       – aktive dll == .openxr Backup
-          'needs_setup'  – kein Backup vorhanden (erster Start)
-          'game_updated' – dll stimmt mit keinem Backup überein (Spiel aktualisiert)
-          'unknown'      – Pfad ungültig oder dll fehlt
+        Detect the active VR mode based on an MD5 comparison.
+
+        Returns:
+          'steamvr'      - active DLL matches the .steamvr backup
+          'openxr'       - active DLL matches the .openxr backup
+          'needs_setup'  - no backup exists yet
+          'game_updated' - active DLL matches neither backup
+          'unknown'      - invalid path or DLL missing
         """
         if not game_path or not os.path.isdir(game_path):
             return "unknown"
 
-        dll     = os.path.join(game_path, OPENVR_DLL)
+        dll = os.path.join(game_path, OPENVR_DLL)
         steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
-        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+        openxr = os.path.join(game_path, OPENVR_DLL_OPENXR)
 
         if not os.path.exists(dll):
             return "unknown"
 
         has_steamvr = os.path.exists(steamvr)
-        has_openxr  = os.path.exists(openxr)
+        has_openxr = os.path.exists(openxr)
 
         if not has_steamvr and not has_openxr:
             return "needs_setup"
@@ -1669,95 +2164,103 @@ class EdSpanshApp:
 
     def vr_do_setup(self, game_path, openxr_source):
         """
-        Erstmalig-Setup oder Re-Setup nach Game-Update:
-          1. openvr_api.dll  →  openvr_api.dll.steamvr  (Backup)
-          2. openxr_source   →  openvr_api.dll.openxr   (OpenXR-Kopie)
-        Gibt (success: bool, message: str) zurück.
+        Initial setup or re-setup after a game update:
+          1. openvr_api.dll  -> openvr_api.dll.steamvr
+          2. openxr_source   -> openvr_api.dll.openxr
+
+        Returns (success: bool, message: str).
         """
         if not game_path or not os.path.isdir(game_path):
-            return False, f"Spielpfad nicht gefunden: {game_path}"
+            return False, f"Game path not found: {game_path}"
 
-        dll     = os.path.join(game_path, OPENVR_DLL)
+        dll = os.path.join(game_path, OPENVR_DLL)
         steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
-        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+        openxr = os.path.join(game_path, OPENVR_DLL_OPENXR)
 
         if not os.path.exists(dll):
-            return False, f"{OPENVR_DLL} nicht gefunden in:\n{game_path}"
+            return False, f"{OPENVR_DLL} was not found in:\n{game_path}"
 
         if not openxr_source or not os.path.exists(openxr_source):
-            return False, ("OpenXR DLL Quelle nicht gefunden.\n"
-                           "Bitte den Pfad unter 'OpenXR DLL Source' angeben.")
+            return False, (
+                "OpenXR DLL source was not found.\n"
+                "Please set the path under 'OpenXR DLL Source'."
+            )
 
         try:
             shutil.copy2(dll, steamvr)
             shutil.copy2(openxr_source, openxr)
-            return True, (f"Setup erfolgreich:\n"
-                          f"  {OPENVR_DLL_STEAMVR}  erstellt\n"
-                          f"  {OPENVR_DLL_OPENXR}   kopiert")
+            return True, (
+                f"Setup completed successfully:\n"
+                f"  {OPENVR_DLL_STEAMVR} created\n"
+                f"  {OPENVR_DLL_OPENXR} copied"
+            )
         except PermissionError:
-            return False, "Zugriff verweigert – bitte als Administrator ausführen."
+            return False, "Access denied - please run the application as administrator."
         except Exception as e:
-            return False, f"Fehler beim Setup: {e}"
+            return False, f"Setup failed: {e}"
 
     def vr_switch(self, game_path, target_mode):
         """
-        Wechselt den VR-Modus:
-          Kopiert .steamvr oder .openxr Backup → openvr_api.dll
-        Gibt (success: bool, message: str) zurück.
+        Switch the VR mode by copying a backup DLL over openvr_api.dll.
+
+        Returns (success: bool, message: str).
         """
         if not game_path or not os.path.isdir(game_path):
-            return False, f"Spielpfad nicht gefunden: {game_path}"
+            return False, f"Game path not found: {game_path}"
 
-        dll     = os.path.join(game_path, OPENVR_DLL)
+        dll = os.path.join(game_path, OPENVR_DLL)
         steamvr = os.path.join(game_path, OPENVR_DLL_STEAMVR)
-        openxr  = os.path.join(game_path, OPENVR_DLL_OPENXR)
+        openxr = os.path.join(game_path, OPENVR_DLL_OPENXR)
 
         try:
             if target_mode == "steamvr":
                 if not os.path.exists(steamvr):
-                    return False, (f"{OPENVR_DLL_STEAMVR} nicht gefunden –\n"
-                                   f"bitte zuerst Setup ausführen.")
+                    return False, (
+                        f"{OPENVR_DLL_STEAMVR} was not found.\n"
+                        f"Please run setup first."
+                    )
                 shutil.copy2(steamvr, dll)
-                return True, "Erfolgreich auf SteamVR / OpenVR umgestellt."
+                return True, "Successfully switched to SteamVR / OpenVR."
 
-            elif target_mode == "openxr":
+            if target_mode == "openxr":
                 if not os.path.exists(openxr):
-                    return False, (f"{OPENVR_DLL_OPENXR} nicht gefunden –\n"
-                                   f"bitte zuerst Setup ausführen.")
+                    return False, (
+                        f"{OPENVR_DLL_OPENXR} was not found.\n"
+                        f"Please run setup first."
+                    )
                 shutil.copy2(openxr, dll)
-                return True, "Erfolgreich auf OpenXR umgestellt."
+                return True, "Successfully switched to OpenXR."
 
-            else:
-                return False, f"Unbekannter Modus: {target_mode}"
+            return False, f"Unknown mode: {target_mode}"
 
         except PermissionError:
-            return False, "Zugriff verweigert – bitte als Administrator ausführen."
+            return False, "Access denied - please run the application as administrator."
         except Exception as e:
-            return False, f"Fehler beim Kopieren: {e}"
+            return False, f"Copy operation failed: {e}"
 
     def vr_mode_label(self, mode):
         return {
-            "steamvr":      "● SteamVR / OpenVR  (aktiv)",
-            "openxr":       "● OpenXR  (aktiv)",
-            "needs_setup":  "⚠  Setup erforderlich  (erster Start)",
-            "game_updated": "⚠  Spiel aktualisiert – Setup erneut ausführen",
-            "unknown":      "●  Unbekannt / Pfad nicht gefunden",
+            "steamvr": "● SteamVR / OpenVR (active)",
+            "openxr": "● OpenXR (active)",
+            "needs_setup": "⚠ Setup required (first use)",
+            "game_updated": "⚠ Game updated - run setup again",
+            "unknown": "● Unknown / path not found",
         }.get(mode, "● ?")
 
     def vr_mode_color(self, mode):
         return {
-            "steamvr":      "#ffd700",
-            "openxr":       "#00d26a",
-            "needs_setup":  "#ff7300",
+            "steamvr": "#ffd700",
+            "openxr": "#00d26a",
+            "needs_setup": "#ff7300",
             "game_updated": "#ff3b30",
-            "unknown":      "#808080",
+            "unknown": "#808080",
         }.get(mode, "#808080")
 
     # ------------------------------------------------------------------
     # Route logic
     # ------------------------------------------------------------------
     def distance(self, destination_coord, current_coord):
-        dest_x,    dest_y,    dest_z    = destination_coord
+        dest_x, dest_y, dest_z = destination_coord
         current_x, current_y, current_z = current_coord
         dx = dest_x - current_x
         dy = dest_y - current_y
@@ -1769,29 +2272,32 @@ class EdSpanshApp:
             return None
 
         current_index = -1
-        on_route      = False
+        on_route = False
 
         for i, jump in enumerate(self.my_route):
             if jump["name"].lower() == system_name.lower():
                 current_index = i
-                on_route      = True
+                on_route = True
                 break
 
         if current_index == -1:
-            self.log("Current system not in route, searching closest system...")
-            min_distance  = float("inf")
+            self.log("Current system is not in the route. Searching for the closest route system...")
+            min_distance = float("inf")
             closest_index = -1
+
             for i, jump in enumerate(self.my_route):
                 dist = self.distance(
-                    (jump["x"], jump["y"], jump["z"]), current_coordinates
+                    (jump["x"], jump["y"], jump["z"]),
+                    current_coordinates
                 )
                 if dist < min_distance:
-                    min_distance  = dist
+                    min_distance = dist
                     closest_index = i
+
             current_index = closest_index
             if current_index != -1:
                 self.log(
-                    f"Closest system in route is "
+                    f"Closest route system: "
                     f"{self.my_route[current_index]['name']} ({min_distance} LY)"
                 )
                 if current_index > 0:
@@ -1805,7 +2311,7 @@ class EdSpanshApp:
         if self.route_index >= len(self.my_route):
             return "ROUTE_FINISHED"
 
-        next_system     = self.my_route[self.route_index]
+        next_system = self.my_route[self.route_index]
         remaining_route = self.my_route[self.route_index:]
 
         next_wp_coord = (
@@ -1850,6 +2356,7 @@ class EdSpanshApp:
             return ImageFont.truetype(font_name, min_size)
         except IOError:
             return ImageFont.load_default()
+
     def gen_galaxy_plotter_image(
         self,
         current_system,
@@ -1863,99 +2370,136 @@ class EdSpanshApp:
         scoopable_star,
         neutron_star,
     ):
-        img_width  = 1000
+        img_width = 1000
         img_height = 445
 
-        bg_color       = (6, 8, 12)
-        line_dim       = (80, 40, 0)
-        ed_orange      = (255, 115, 0)
+        bg_color = (6, 8, 12)
+        line_dim = (80, 40, 0)
+        ed_orange = (255, 115, 0)
         ed_orange_soft = (220, 100, 0)
-        ed_orange_dim  = (150, 70, 0)
-        ed_cyan        = (89, 223, 227)
-        color_on       = (40, 210, 110)
-        color_off      = (231, 76, 60)
-        color_unknown  = (128, 128, 128)
-        font_name      = "arial.ttf"
+        ed_orange_dim = (150, 70, 0)
+        ed_cyan = (89, 223, 227)
+        color_on = (40, 210, 110)
+        color_off = (231, 76, 60)
+        color_unknown = (128, 128, 128)
+        font_name = "arial.ttf"
 
         try:
-            font_big    = ImageFont.truetype(font_name, 28)
+            font_big = ImageFont.truetype(font_name, 28)
             font_medium = ImageFont.truetype(font_name, 22)
-            font_small  = ImageFont.truetype(font_name, 19)
+            font_small = ImageFont.truetype(font_name, 19)
         except IOError:
-            font_big    = ImageFont.load_default()
+            font_big = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small  = ImageFont.load_default()
+            font_small = ImageFont.load_default()
 
-        img  = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img = Image.new("RGB", (img_width, img_height), color=bg_color)
         draw = ImageDraw.Draw(img)
 
-        title_text   = f"NAVIGATION TO: {str(destination).upper()}"
-        title_font   = self._fit_font(draw, title_text, font_name,
-                                      start_size=22, min_size=14, max_width=740)
+        title_text = f"NAVIGATION TO: {str(destination).upper()}"
+        title_font = self._fit_font(
+            draw, title_text, font_name,
+            start_size=22, min_size=14, max_width=740
+        )
         current_text = str(current_system).upper()
-        current_font = self._fit_font(draw, current_text, font_name,
-                                      start_size=38, min_size=20, max_width=900)
-        next_text    = f"{str(system_name).upper()} ({jump_distance:.0f} LY)"
-        next_font    = self._fit_font(draw, next_text, font_name,
-                                      start_size=38, min_size=20, max_width=680)
+        current_font = self._fit_font(
+            draw, current_text, font_name,
+            start_size=38, min_size=20, max_width=900
+        )
+        next_text = f"{str(system_name).upper()} ({jump_distance:.0f} LY)"
+        next_font = self._fit_font(
+            draw, next_text, font_name,
+            start_size=38, min_size=20, max_width=680
+        )
 
-        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange,     width=2)
+        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
         draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
 
-        draw.line([(35, 68),  (965, 68)],  fill=ed_orange_dim, width=1)
-        draw.line([(35, 160), (965, 160)], fill=line_dim,       width=1)
-        draw.line([(35, 315), (965, 315)], fill=line_dim,       width=1)
+        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
+        draw.line([(35, 160), (965, 160)], fill=line_dim, width=1)
+        draw.line([(35, 315), (965, 315)], fill=line_dim, width=1)
 
         draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
 
-        route_status_text  = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
-        route_status_color = color_on   if current_system_on_route else color_off
+        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
+        route_status_color = color_on if current_system_on_route else color_off
         route_dot_y = 30
-        draw.ellipse([(820, route_dot_y), (846, route_dot_y + 26)],
-                     fill=route_status_color)
-        draw.text((860, route_dot_y + 1), route_status_text,
-                  fill=ed_orange, font=font_medium)
+        draw.ellipse(
+            [(820, route_dot_y), (846, route_dot_y + 26)],
+            fill=route_status_color
+        )
+        draw.text(
+            (860, route_dot_y + 1),
+            route_status_text,
+            fill=ed_orange,
+            font=font_medium
+        )
 
-        draw.text((45, 82),  "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
-        draw.text((45, 108), current_text,      fill=ed_cyan,        font=current_font)
-        draw.text((45, 178), "NEXT WAYPOINT",   fill=ed_orange_soft, font=font_small)
-        draw.text((45, 205), next_text,          fill=ed_orange,      font=next_font)
+        draw.text((45, 82), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
+        draw.text((45, 108), current_text, fill=ed_cyan, font=current_font)
+        draw.text((45, 178), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_small)
+        draw.text((45, 205), next_text, fill=ed_orange, font=next_font)
 
-        scoop_color   = (color_unknown if scoopable_star is None
-                         else (color_on if scoopable_star else color_off))
+        scoop_color = (
+            color_unknown if scoopable_star is None
+            else (color_on if scoopable_star else color_off)
+        )
         neutron_color = color_on if neutron_star else color_off
 
-        draw.ellipse([(55,  265), (81,  291)], fill=scoop_color)
-        draw.text((95,  266), "SCOOPABLE",    fill=ed_orange, font=font_medium)
+        draw.ellipse([(55, 265), (81, 291)], fill=scoop_color)
+        draw.text((95, 266), "SCOOPABLE", fill=ed_orange, font=font_medium)
         draw.ellipse([(310, 265), (336, 291)], fill=neutron_color)
         draw.text((350, 266), "NEUTRON STAR", fill=ed_orange, font=font_medium)
 
         metric_label_y = 335
         metric_value_y = 362
 
-        draw.text((70,  metric_label_y), "JUMPS LEFT",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((70,  metric_value_y), f"{jumps_remain}",
-                  fill=ed_orange, font=font_big)
-        draw.text((370, metric_label_y), "DISTANCE REMAINING",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((370, metric_value_y), f"{distance_remain:n} LY",
-                  fill=ed_orange, font=font_big)
-        draw.text((690, metric_label_y), "TRAVELED",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((690, metric_value_y), f"{distance_traveled:n} LY",
-                  fill=ed_orange, font=font_big)
+        draw.text(
+            (70, metric_label_y),
+            "JUMPS LEFT",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (70, metric_value_y),
+            f"{jumps_remain}",
+            fill=ed_orange,
+            font=font_big
+        )
+        draw.text(
+            (370, metric_label_y),
+            "DISTANCE REMAINING",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (370, metric_value_y),
+            f"{distance_remain:n} LY",
+            fill=ed_orange,
+            font=font_big
+        )
+        draw.text(
+            (690, metric_label_y),
+            "TRAVELED",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (690, metric_value_y),
+            f"{distance_traveled:n} LY",
+            fill=ed_orange,
+            font=font_big
+        )
 
         draw.line([(320, 330), (320, 400)], fill=line_dim, width=1)
         draw.line([(645, 330), (645, 400)], fill=line_dim, width=1)
 
-        # Corner brackets
-        draw.line([(22,  22),  (52,  22)],  fill=ed_orange, width=2)
-        draw.line([(22,  22),  (22,  52)],  fill=ed_orange, width=2)
-        draw.line([(948, 22),  (978, 22)],  fill=ed_orange, width=2)
-        draw.line([(978, 22),  (978, 52)],  fill=ed_orange, width=2)
-        draw.line([(22,  393), (22,  423)], fill=ed_orange, width=2)
-        draw.line([(22,  423), (52,  423)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
+        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
+        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
+        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
+        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
         draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
         draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
 
@@ -1963,6 +2507,7 @@ class EdSpanshApp:
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
         img.save(self.kneeboard_output_img_file)
+
     def gen_destination_reached_image(
         self,
         current_system,
@@ -1972,46 +2517,52 @@ class EdSpanshApp:
         distance_remain,
         distance_traveled,
     ):
-        img_width  = 1000
+        img_width = 1000
         img_height = 445
 
-        bg_color       = (6, 8, 12)
-        line_dim       = (80, 40, 0)
-        ed_orange      = (255, 115, 0)
+        bg_color = (6, 8, 12)
+        line_dim = (80, 40, 0)
+        ed_orange = (255, 115, 0)
         ed_orange_soft = (220, 100, 0)
-        ed_orange_dim  = (150, 70, 0)
-        ed_cyan        = (89, 223, 227)
-        color_on       = (40, 210, 110)
-        font_name      = "arial.ttf"
+        ed_orange_dim = (150, 70, 0)
+        ed_cyan = (89, 223, 227)
+        color_on = (40, 210, 110)
+        font_name = "arial.ttf"
 
         try:
-            font_big    = ImageFont.truetype(font_name, 28)
+            font_big = ImageFont.truetype(font_name, 28)
             font_medium = ImageFont.truetype(font_name, 22)
-            font_small  = ImageFont.truetype(font_name, 19)
+            font_small = ImageFont.truetype(font_name, 19)
         except IOError:
-            font_big    = ImageFont.load_default()
+            font_big = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small  = ImageFont.load_default()
+            font_small = ImageFont.load_default()
 
-        img  = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img = Image.new("RGB", (img_width, img_height), color=bg_color)
         draw = ImageDraw.Draw(img)
 
-        title_text   = f"NAVIGATION TO: {str(destination).upper()}"
-        title_font   = self._fit_font(draw, title_text, font_name,
-                                      start_size=22, min_size=14, max_width=740)
+        title_text = f"NAVIGATION TO: {str(destination).upper()}"
+        title_font = self._fit_font(
+            draw, title_text, font_name,
+            start_size=22, min_size=14, max_width=740
+        )
         current_text = str(current_system).upper()
-        current_font = self._fit_font(draw, current_text, font_name,
-                                      start_size=38, min_size=20, max_width=900)
-        next_text    = "DESTINATION REACHED"
-        next_font    = self._fit_font(draw, next_text, font_name,
-                                      start_size=38, min_size=20, max_width=680)
+        current_font = self._fit_font(
+            draw, current_text, font_name,
+            start_size=38, min_size=20, max_width=900
+        )
+        next_text = "DESTINATION REACHED"
+        next_font = self._fit_font(
+            draw, next_text, font_name,
+            start_size=38, min_size=20, max_width=680
+        )
 
-        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange,     width=2)
+        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
         draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
 
-        draw.line([(35, 68),  (965, 68)],  fill=ed_orange_dim, width=1)
-        draw.line([(35, 160), (965, 160)], fill=line_dim,       width=1)
-        draw.line([(35, 315), (965, 315)], fill=line_dim,       width=1)
+        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
+        draw.line([(35, 160), (965, 160)], fill=line_dim, width=1)
+        draw.line([(35, 315), (965, 315)], fill=line_dim, width=1)
 
         draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
 
@@ -2019,35 +2570,59 @@ class EdSpanshApp:
         draw.ellipse([(820, route_dot_y), (846, route_dot_y + 26)], fill=color_on)
         draw.text((860, route_dot_y + 1), "REACHED", fill=ed_orange, font=font_medium)
 
-        draw.text((45, 82),  "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
-        draw.text((45, 108), current_text,      fill=ed_cyan,        font=current_font)
-        draw.text((45, 205), next_text,          fill=color_on,       font=next_font)
+        draw.text((45, 82), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_small)
+        draw.text((45, 108), current_text, fill=ed_cyan, font=current_font)
+        draw.text((45, 205), next_text, fill=color_on, font=next_font)
 
         metric_label_y = 335
         metric_value_y = 362
 
-        draw.text((70,  metric_label_y), "JUMPS LEFT",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((70,  metric_value_y), f"{jumps_remain}",
-                  fill=ed_orange, font=font_big)
-        draw.text((370, metric_label_y), "DISTANCE REMAINING",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((370, metric_value_y), f"{distance_remain:n} LY",
-                  fill=ed_orange, font=font_big)
-        draw.text((690, metric_label_y), "TRAVELED",
-                  fill=ed_orange_dim, font=font_small)
-        draw.text((690, metric_value_y), f"{distance_traveled:n} LY",
-                  fill=ed_orange, font=font_big)
+        draw.text(
+            (70, metric_label_y),
+            "JUMPS LEFT",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (70, metric_value_y),
+            f"{jumps_remain}",
+            fill=ed_orange,
+            font=font_big
+        )
+        draw.text(
+            (370, metric_label_y),
+            "DISTANCE REMAINING",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (370, metric_value_y),
+            f"{distance_remain:n} LY",
+            fill=ed_orange,
+            font=font_big
+        )
+        draw.text(
+            (690, metric_label_y),
+            "TRAVELED",
+            fill=ed_orange_dim,
+            font=font_small
+        )
+        draw.text(
+            (690, metric_value_y),
+            f"{distance_traveled:n} LY",
+            fill=ed_orange,
+            font=font_big
+        )
 
         draw.line([(320, 330), (320, 400)], fill=line_dim, width=1)
         draw.line([(645, 330), (645, 400)], fill=line_dim, width=1)
 
-        draw.line([(22,  22),  (52,  22)],  fill=ed_orange, width=2)
-        draw.line([(22,  22),  (22,  52)],  fill=ed_orange, width=2)
-        draw.line([(948, 22),  (978, 22)],  fill=ed_orange, width=2)
-        draw.line([(978, 22),  (978, 52)],  fill=ed_orange, width=2)
-        draw.line([(22,  393), (22,  423)], fill=ed_orange, width=2)
-        draw.line([(22,  423), (52,  423)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
+        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
+        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
+        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
+        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
         draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
         draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
 
@@ -2067,8 +2642,8 @@ class EdSpanshApp:
 
         self.total_distance_traveled = 0.0
         self.monitoring_active = True
-        self.stop_requested    = False
-        self.is_paused         = False
+        self.stop_requested = False
+        self.is_paused = False
 
         self.start_btn.config(state="disabled")
         self.pause_btn.config(state="normal")
@@ -2080,8 +2655,10 @@ class EdSpanshApp:
     def toggle_pause(self):
         if not self.monitoring_active:
             return
+
         self.is_paused = not self.is_paused
         self._update_transport_btn_states()
+
         if self.is_paused:
             self.log("Monitor paused. Events will be ignored.")
         else:
@@ -2091,9 +2668,9 @@ class EdSpanshApp:
         if not self.monitoring_active and not preserve_arrived_state:
             return
 
-        self.stop_requested    = True
+        self.stop_requested = True
         self.monitoring_active = False
-        self.is_paused         = False
+        self.is_paused = False
 
         self.start_btn.config(state="normal")
         self.pause_btn.config(state="disabled")
@@ -2117,6 +2694,7 @@ class EdSpanshApp:
         self.refresh_dashboard_image()
         self.log("Destination reached! You have arrived at the end of your Spansh route.")
         self.stop_monitoring(preserve_arrived_state=True)
+
     # ------------------------------------------------------------------
     # Event handling
     # ------------------------------------------------------------------
@@ -2125,7 +2703,7 @@ class EdSpanshApp:
             return
 
         system_name = event_data.get("StarSystem")
-        star_pos    = event_data.get("StarPos")
+        star_pos = event_data.get("StarPos")
 
         if not system_name:
             self.log("Ignored event without StarSystem.")
@@ -2156,8 +2734,16 @@ class EdSpanshApp:
             self.highlight_route_table(system_name, None)
             return
 
-        (next_stop, scoopable, has_neutron, jump_dist,
-         jumps_remain, destination, distance_to_destination, on_route) = result
+        (
+            next_stop,
+            scoopable,
+            has_neutron,
+            jump_dist,
+            jumps_remain,
+            destination,
+            distance_to_destination,
+            on_route,
+        ) = result
 
         self.highlight_route_table(system_name, next_stop)
         self.update_dashboard(
@@ -2168,10 +2754,14 @@ class EdSpanshApp:
             has_neutron=has_neutron,
         )
 
-        self.log(f"Next: {next_stop} | Scoop: {scoopable} | "
-                 f"Neutron: {has_neutron} | Dist: {jump_dist} LY")
-        self.log(f"Progress: {jumps_remain} jumps remaining until "
-                 f"final target: {destination}")
+        self.log(
+            f"Next: {next_stop} | Scoopable: {scoopable} | "
+            f"Neutron: {has_neutron} | Distance: {jump_dist} LY"
+        )
+        self.log(
+            f"Progress: {jumps_remain} jumps remaining until "
+            f"final destination: {destination}"
+        )
 
         if self.copy_to_clipboard(next_stop):
             self.log(f"Copied next waypoint to clipboard: {next_stop}")
@@ -2208,6 +2798,7 @@ class EdSpanshApp:
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
+
             for line in reversed(lines):
                 try:
                     data = json.loads(line)
@@ -2217,6 +2808,7 @@ class EdSpanshApp:
                     continue
         except Exception as e:
             self.thread_safe_log(f"Error reading startup location: {e}")
+
         return None
 
     def monitor_journal(self):
@@ -2236,7 +2828,7 @@ class EdSpanshApp:
             self.ui_call(self.jump_detected, start_event, True)
         else:
             self.thread_safe_log(
-                "Could not find current location in the log file."
+                "Could not find the current location in the log file."
             )
 
         self.thread_safe_log(
@@ -2257,8 +2849,12 @@ class EdSpanshApp:
                         )
                         current_journal = latest_journal
                         file.close()
-                        file = open(current_journal, "r",
-                                    encoding="utf-8", errors="ignore")
+                        file = open(
+                            current_journal,
+                            "r",
+                            encoding="utf-8",
+                            errors="ignore"
+                        )
                         file.seek(0, os.SEEK_END)
 
                     line = file.readline()
@@ -2288,5 +2884,5 @@ class EdSpanshApp:
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     root = tkinterdnd2.TkinterDnD.Tk()
-    app  = EdSpanshApp(root)
+    app = EdSpanshApp(root)
     root.mainloop()
