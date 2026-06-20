@@ -1,9 +1,9 @@
 # Elite Dangerous - Spansh VR Navigator
 
-![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Status](https://img.shields.io/badge/status-active-success)
-![License](https://img.shields.io/badge/license-personal-lightgrey)
+![Platform](https://shields.io)
+![Python](https://shields.io)
+![Status](https://shields.io)
+[![License: CC BY-NC-SA 4.0](https://shields.io)](https://creativecommons.org)
 
 A lightweight desktop helper for **Elite Dangerous** VR navigation.
 
@@ -29,12 +29,13 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
     - [Main Window](#main-window)
     - [VR Settings](#vr-settings)
     - [Generated Navigation Image](#generated-navigation-image)
-  - [](#)
   - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
   - [Notes](#notes)
   - [Known Issues](#known-issues)
   - [Recommended VR Setup](#recommended-vr-setup)
   - [Disclaimer](#disclaimer)
+  - [License](#license)
+
 ---
 
 ## Features
@@ -57,13 +58,13 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
 The following tools/files must be installed or downloaded manually:
 
 - **OpenXR DLL**
-  https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr
+  <https://znix.xyz>
 
 - **OpenKneeboard**
-  https://openkneeboard.com/
+  <https://openkneeboard.com>
 
 - **VoiceAttack** or a similar clipboard/input automation tool
-  https://voiceattack.com/
+  <https://voiceattack.com>
 
 ---
 
@@ -79,6 +80,7 @@ Whenever possible, it:
 - copies that system name to the **clipboard**
 - generates a **navigation image**
 - updates the image for viewing in **OpenKneeboard**
+
 ---
 
 ## Typical Workflow
@@ -129,6 +131,7 @@ python ed_spansh_helper.py
 ~~~bash
 pyinstaller --noconsole --onefile ed_spansh_helper.py
 ~~~
+
 ### requirements.txt
 
 ~~~txt
@@ -151,6 +154,7 @@ tkinterdnd2
 ### Generated Navigation Image
 
 ![Generated Navigation Image](docs/images/navigation_image.png)
+
 ---
 
 ## Example VoiceAttack Workflow
@@ -183,6 +187,7 @@ This way, the waypoint copied by this tool can be inserted into the game with mi
 - The generated PNG can be displayed with **OpenKneeboard**
 - VR DLL switching may require **administrator rights**
 - After a game update, **VR setup may need to be run again**
+
 ---
 
 ## Known Issues
@@ -209,3 +214,22 @@ This way, the waypoint copied by this tool can be inserted into the game with mi
 This is a helper utility for Elite Dangerous players.
 
 Use it at your own risk and always verify your paths, DLL files, and automation setup.
+
+---
+
+## License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)** License.
+
+You are free to:
+
+- **Share** — copy and redistribute the material in any medium or format.
+- **Adapt** — remix, transform, and build upon the material.
+
+Under the following terms:
+
+- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+- **NonCommercial** — You may not use the material for commercial purposes.
+- **ShareAlike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+For more details, please see the full [Creative Commons Legal Code](https://creativecommons.orglegalcode).
