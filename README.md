@@ -18,16 +18,16 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [Motivation \& Background](#motivation--background)
     - [Development Note](#development-note)
   - [What It Does](#what-it-does)
+  - [Screenshots / Images](#screenshots--images)
+    - [Main Window](#main-window)
+    - [Generated Navigation Image](#generated-navigation-image)
+  - [](#)
   - [Required Downloads](#required-downloads)
   - [Installation](#installation)
     - [Requirements](#requirements)
     - [Python packages](#python-packages)
     - [Run](#run)
     - [Build EXE](#build-exe)
-  - [Screenshots / Images](#screenshots--images)
-    - [Main Window](#main-window)
-    - [Generated Navigation Image](#generated-navigation-image)
-  - [](#)
   - [Initial Setup](#initial-setup)
   - [Workflow to import a Spansh Route](#workflow-to-import-a-spansh-route)
   - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
@@ -60,6 +60,17 @@ Whenever possible, it:
 - generates a **navigation image**
 - updates the image for viewing in **OpenKneeboard**
 
+---
+
+## Screenshots / Images
+
+### Main Window
+
+![Main Window](docs/images/main_window.png)
+
+### Generated Navigation Image
+
+![Generated Navigation Image](docs/images/navigation_image.png)
 ---
 
 ## Required Downloads
@@ -112,17 +123,6 @@ If you want to build your own Executable
 pyinstaller --noconsole --onefile ed_spansh_helper.py
 ~~~
 
----
-
-## Screenshots / Images
-
-### Main Window
-
-![Main Window](docs/images/main_window.png)
-
-### Generated Navigation Image
-
-![Generated Navigation Image](docs/images/navigation_image.png)
 ---
 
 ## Initial Setup
