@@ -115,11 +115,12 @@ You can run the provided .exe from the dist folder
 > [!WARNING]
 > **Antivirus False Positives:** Pre-compiled executables built with `pyinstaller` often trigger false malware warnings in Windows Defender or other antivirus software. This is a common issue with Python-to-EXE converters because they bundle the interpreter into a temporary directory. The tool contains absolutely no malicious code. If you prefer not to bypass your antivirus, you can always safely run the application from the source code using `python ed_spansh_helper.py`.
 
+or you could run it as Python Script
+
 ### Requirements
 
 - Windows
 - Python 3.10+ recommended
-- Elite Dangerous
 
 ### Python packages
 
@@ -219,6 +220,8 @@ This way, the waypoint copied by this tool can be inserted into the game with mi
 This is a helper utility for Elite Dangerous players.
 
 Use it at your own risk and always verify your paths, DLL files, and automation setup.
+
+Please note that this project is completely independent. Third-party tools and resources mentioned or integrated here—including **spansh.co.uk**, **OpenKneeboard**, **VoiceAttack** and the **OpenXR DLL**—are the property of their respective creators and are not affiliated with or developed by me.
 
 ## License
 

@@ -1,7 +1,7 @@
 ##########################################################################
 # DATE              13.06.2026                                           #
 #                                                                        #
-# AUTHOR            Bernard Härri / Chat AI                              #
+# AUTHOR            Bernard Härri but mostly AI (ChatGPT/Gemini/Claude)  #
 #                                                                        #
 # COMPILE: pyinstaller --noconsole --onefile ed_spansh_helper.py         #
 #                                                                        #
