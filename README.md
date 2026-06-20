@@ -15,6 +15,8 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
 
 - [Elite Dangerous - Spansh VR Navigator](#elite-dangerous---spansh-vr-navigator)
   - [Table of Contents](#table-of-contents)
+  - [Motivation \& Background](#motivation--background)
+    - [Development Note](#development-note)
   - [Features](#features)
   - [Required Downloads](#required-downloads)
   - [What It Does](#what-it-does)
@@ -38,6 +40,14 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [License](#license)
 
 ---
+
+## Motivation & Background
+
+I originally created this tool for myself to solve a specific pain point in Virtual Reality. While **spansh.co.uk** is an amazing website for route planning in Elite Dangerous, using it in VR was incredibly tedious. Copying and pasting each individual waypoint manually meant taking off and putting on my VR headset for every single jump. I wanted a smoother, seamless solution that keeps me immersed in the game.
+
+### Development Note
+
+This project was built with a lot of help from Large Language Models (LLMs) — including this one! While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase to make it clean and functional.
 
 ## Features
 
