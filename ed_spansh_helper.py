@@ -100,7 +100,7 @@ class EdSpanshApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Elite Dangerous - Spansh VR Navigator")
-        self.root.geometry("1500x850")
+        self.root.geometry("1500x950")
         self.root.minsize(1200, 650)
 
         self.my_route = []
@@ -129,6 +129,7 @@ class EdSpanshApp:
         self.apply_theme(self.current_theme_name)
         self.setup_drag_and_drop()
         self.load_last_route_on_startup()
+        self.root.after(300, self.check_vr_setup_on_startup)  # ← NEU
 
     def load_last_route_on_startup(self):
         if not self.last_route_file:
@@ -142,6 +143,34 @@ class EdSpanshApp:
         self.file_entry.insert(0, self.last_route_file)
         if self.read_route_file():
             self.log(f"Auto-loaded last route file: {self.last_route_file}")
+
+    def check_vr_setup_on_startup(self):
+        games_needing_setup = []
+
+        for label, path in [
+            ("Elite Dangerous Horizons", self.ed_horizons_path),
+            ("Elite Dangerous Odyssey",  self.ed_odyssey_path),
+        ]:
+            if path and os.path.isdir(path):
+                mode = self.vr_detect_mode(path)
+                if mode in ("needs_setup", "game_updated"):
+                    games_needing_setup.append(label)
+
+        if not games_needing_setup:
+            return
+
+        for g in games_needing_setup:
+            self.log(f"⚠  VR Setup erforderlich: {g}")
+        self.log("   → Settings > VR Mode > ⚙ Setup / Re-Setup")
+
+        game_list = "\n".join(f"  • {g}" for g in games_needing_setup)
+        messagebox.showwarning(
+            "VR Setup erforderlich",
+            f"Das OpenVR DLL Setup muss noch durchgeführt werden für:\n\n"
+            f"{game_list}\n\n"
+            f"Bitte unter Settings → VR Mode '⚙ Setup / Re-Setup' ausführen.",
+            parent=self.root,
+        )
 
     # ------------------------------------------------------------------
     # Thread / UI helpers
@@ -674,6 +703,7 @@ class EdSpanshApp:
             style.theme_use("clam")
         except Exception:
             pass
+
         style.configure(
             "Orange.TCombobox",
             fieldbackground=t["input_bg"],
@@ -684,6 +714,22 @@ class EdSpanshApp:
             lightcolor=t["panel_border"],
             darkcolor=t["panel_border"],
         )
+
+        # ── NEU: readonly-Zustand explizit stylen ──────────────────────────
+        style.map(
+            "Orange.TCombobox",
+            fieldbackground=[("readonly", t["input_bg"])],
+            foreground=[("readonly", t["input_fg"])],
+            selectbackground=[("readonly", t["input_bg"])],   # kein blauer Blob
+            selectforeground=[("readonly", t["accent_fg"])],  # Text in Orange
+        )
+
+        # ── NEU: Dropdown-Listbox stylen ───────────────────────────────────
+        self.root.option_add("*TCombobox*Listbox.background",     t["input_bg"])
+        self.root.option_add("*TCombobox*Listbox.foreground",     t["input_fg"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", t["accent_fg"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", "#000000")
+        self.root.option_add("*TCombobox*Listbox.font", ("Arial", 10))
 
     def apply_theme(self, theme_name):
         t = THEMES[theme_name]
@@ -1053,6 +1099,7 @@ class EdSpanshApp:
         self.ship_build_dropdown["values"] = names
         if names:
             self.ship_build_var.set(names[0])
+            self.ship_build_dropdown.current(0)  # ← NEU: visuell vorauswählen
         else:
             self.ship_build_var.set("")
 
