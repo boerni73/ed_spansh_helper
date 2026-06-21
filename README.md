@@ -17,23 +17,21 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [Table of Contents](#table-of-contents)
   - [Motivation \& Background](#motivation--background)
     - [Development Note](#development-note)
-  - [What It Does](#what-it-does)
-  - [Screenshots / Images](#screenshots--images)
+  - [Features](#features)
+  - [Screenshots](#screenshots)
     - [Main Window](#main-window)
     - [Generated Navigation Image](#generated-navigation-image)
-  - [](#)
-  - [Required Downloads](#required-downloads)
+  - [Prerequisites \& Downloads](#prerequisites--downloads)
   - [Installation](#installation)
-    - [Requirements](#requirements)
-    - [Python packages](#python-packages)
-    - [Run](#run)
-    - [Build EXE](#build-exe)
-  - [Initial Setup](#initial-setup)
-  - [Workflow to import a Spansh Route](#workflow-to-import-a-spansh-route)
-  - [Example VoiceAttack Workflow](#example-voiceattack-workflow)
-  - [Notes](#notes)
-  - [Known Issues](#known-issues)
-  - [Recommended VR Setup](#recommended-vr-setup)
+    - [Option 1: Run the Executable (Recommended for users)](#option-1-run-the-executable-recommended-for-users)
+    - [Option 2: Run from Source (For developers)](#option-2-run-from-source-for-developers)
+  - [Initial Setup (Do This Once)](#initial-setup-do-this-once)
+    - [1. Folder Configuration](#1-folder-configuration)
+    - [2. VR \& OpenXR Setup](#2-vr--openxr-setup)
+    - [3. OpenKneeboard Quickstart](#3-openkneeboard-quickstart)
+    - [4. VoiceAttack Automation (Optional but Recommended)](#4-voiceattack-automation-optional-but-recommended)
+  - [Daily Workflow (How to Use)](#daily-workflow-how-to-use)
+  - [Tips, Limitations \& Known Issues](#tips-limitations--known-issues)
   - [Disclaimer](#disclaimer)
   - [License](#license)
 
@@ -41,28 +39,23 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
 
 ## Motivation & Background
 
-I originally created this tool for myself to solve a specific pain point in Virtual Reality. While **spansh.co.uk** is an amazing website for route planning in Elite Dangerous, using it in VR was incredibly tedious. Copying and pasting each individual waypoint manually meant taking off and putting on my VR headset for every single jump. I wanted a smoother, seamless solution that keeps me immersed in the game.
+I originally created this tool to solve a specific pain point in Virtual Reality. While **spansh.co.uk** is amazing for route planning, using it in VR is tedious. Manually copying and pasting each waypoint meant constantly lifting the VR headset. This tool provides a seamless solution to keep you fully immersed.
 
 ### Development Note
 
-This project was built with a lot of help from Large Language Models (LLMs). While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase to make it clean and functional.
-
-## What It Does
-
-The application is designed to make **VR route navigation** in Elite Dangerous more comfortable.
-
-It continuously tries to determine the **next waypoint** of the loaded Spansh route based on your current location.
-
-Whenever possible, it:
-
-- identifies the next route target
-- copies that system name to the **clipboard**
-- generates a **navigation image**
-- updates the image for viewing in **OpenKneeboard**
+This project was built with significant assistance from Large Language Models (LLMs) for writing, refactoring, and restructuring the codebase based on my custom logic and ideas.
 
 ---
 
-## Screenshots / Images
+## Features
+
+- **Automated Tracking:** Detects your next Spansh waypoint based on current in-game location.
+- **Clipboard Sync:** Automatically copies the next system name to your clipboard.
+- **Kneeboard Integration:** Generates a real-time navigation image for VR overlay software.
+
+---
+
+## Screenshots
 
 ### Main Window
 
@@ -71,166 +64,126 @@ Whenever possible, it:
 ### Generated Navigation Image
 
 ![Generated Navigation Image](docs/images/navigation_image.png)
----
-
-## Required Downloads
-
-The following tools/files must be installed or downloaded manually:
-
-- **OpenXR DLL**
-  <https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>
-
-- **OpenKneeboard**
-  <https://openkneeboard.com/>
-
-- **VoiceAttack** or a similar clipboard/input automation tool
-  <https://voiceattack.com/>
 
 ---
+
+## Prerequisites & Downloads
+
+You will need to download and install the following tools:
+
+1. **OpenXR DLL (64-bit):** [Download OpenComposite DLL](https://znix.xyz) (Replaces SteamVR for better performance).
+2. **OpenKneeboard:** [Official Website](https://openkneeboard.com) (To view the nav image in VR).
+3. **VoiceAttack:** [Official Website](https://voiceattack.com) (Recommended for automated clipboard pasting).
+
+---
+
 ## Installation
 
-You can run the [provided .exe from the dist folder](dist/ed_spansh_helper.exe) or run the python script
->
+### Option 1: Run the Executable (Recommended for users)
+
+Run the pre-compiled binary from the repository: `dist/ed_spansh_helper.exe`.
+
 > [!WARNING]
-> **Antivirus False Positives:** Pre-compiled executables built with `pyinstaller` often trigger false malware warnings in Windows Defender or other antivirus software. This is a common issue with Python-to-EXE converters because they bundle the interpreter into a temporary directory. The tool contains absolutely no malicious code. If you prefer not to bypass your antivirus, you can always safely run the application from the source code using `python ed_spansh_helper.py`.
+> **Antivirus False Positives:** Executables built with `pyinstaller` often trigger false malware warnings in Windows Defender. This is a common issue with Python-to-EXE converters. The tool contains no malicious code. If you prefer, use Option 2 to run from source.
 
-### Requirements
+### Option 2: Run from Source (For developers)
 
-- Windows
-- Python 3.10+ recommended
+1. Ensure Python 3.10+ is installed.
+2. Install dependencies:
 
-### Python packages
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Install the required Python packages:
+3. Run the app:
 
-~~~bash
-pip install -r requirements.txt
-~~~
+   ```bash
+   python ed_spansh_helper.py
+   ```
 
-> `tkinter` is usually included with standard Python on Windows.
+4. (Optional) Build your own EXE:
 
-### Run
-
-~~~bash
-python ed_spansh_helper.py
-~~~
-
-### Build EXE
-
-If you want to build your own Executable
-
-~~~bash
-pyinstaller --noconsole --onefile ed_spansh_helper.py
-~~~
+   ```bash
+   pyinstaller --noconsole --onefile ed_spansh_helper.py
+   ```
 
 ---
 
-## Initial Setup
+## Initial Setup (Do This Once)
 
-1. Start the app
-2. Open **Settings**
-3. journal directory. This is where ED writes the journal logs. default is C:\Users\YOUR_USER\Saved Games\Frontier Developments\Elite Dangerous
-4. (optional) kneeboard image output file. This is the Path to the PNG-File that will be created and is used by OpenKneeboard
-![Doc File-Tab Setup](docs/images/file_setup.png)
-5. On the VR Mode Tab
-Configure OpenXR DLL source. This is the Path to the OpenXR DLL you downloaded from [here](<https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr>)
-Let's assume you downloaded it to c:\tmp\newest_openxr.dll
-![Doc VR-Mode-Tab Setup 1](docs/images/vr_mode_setup1.png)
-6. Configure the Path to your ED OpenVR Folder. This is the folder that contains the ED's openvr_api.dll if you're not sure, search for it. I really don't know where this is located in your case... for me it's INSTALLATION_DIRECTORY\EDLaunch\Products\elite-dangerous-odyssey-64\Openvr\win64
-![Doc VR-Mode-Tab Setup 2](docs/images/vr_mode_setup2.png)
-7. If you selected the correct Path, you should see a setup required Message. Press "Setup/Re-Setup"
-![Doc VR-Mode-Tab Setup 3](docs/images/vr_mode_setup3.png)
-8. It should detect, that you're on the SteamVR/OpenVR Version. Press OpenXR
-![Doc VR-Mode-Tab Setup 4](docs/images/vr_mode_setup4.png)
+Follow these steps to configure the application for your first run.
 
-If everything worked, your EliteDangerous is now running with the OpenXR DLL, which is (probably) needed for OpenKneeboard, but even more important, should give you a significant FPS Boost.
-You can change back anytime. If you're using some Steam-Overlay Software like OVR Toolkit, it's likely it won't work anymore. In the directory you specified, there are 3 Files now. openvr_api.dll (dll currently used), openvr_api.dll.steamvr (the original dll) and openvr_api.dll.openxr (a copy of the dll you downloaded). You can also manually rename these files to get back to your original configuration
+### 1. Folder Configuration
 
-## Workflow to import a Spansh Route
+1. Launch the application and open **Settings**.
+2. **Journal Directory:** Set this to your Elite Dangerous journal path.
+   - *Default:* `C:\Users\YOUR_USER\Saved Games\Frontier Developments\Elite Dangerous`
+3. **Kneeboard Output File:** Choose a path where the helper should save the generated PNG image (e.g., `C:\Games\ED_Nav.png`).
+   ![Doc File-Tab Setup](docs/images/file_setup.png)
 
-1. Load a **Spansh route JSON**
-2. Click **Start**
-3. Jump normally in Elite Dangerous
-4. After each jump, the app updates:
-   - current progress
-   - next waypoint
-   - navigation image
+### 2. VR & OpenXR Setup
 
----
+1. Switch to the **VR Mode** tab in Settings.
+2. **OpenXR DLL Source:** Select the `openxr.dll` file you downloaded in the prerequisites step.
+   ![Doc VR-Mode-Tab Setup 1](docs/images/vr_mode_setup1.png)
+3. **ED OpenVR Folder:** Select the folder containing your game's original `openvr_api.dll`.
+   - *Steam Odyssey Default:* `...\SteamApps\common\Elite Dangerous\Products\elite-dangerous-odyssey-64\Openvr\win64`
+   ![Doc VR-Mode-Tab Setup 2](docs/images/vr_mode_setup2.png)
+4. Click **Setup/Re-Setup** when the warning appears.
+   ![Doc VR-Mode-Tab Setup 3](docs/images/vr_mode_setup3.png)
+5. Select **OpenXR** to swap the DLLs.
+   ![Doc VR-Mode-Tab Setup 4](docs/images/vr_mode_setup4.png)
 
-## Example VoiceAttack Workflow
+> [!NOTE]
+> This configuration swaps your VR runtime to OpenXR, which usually grants a significant FPS boost. It creates backups of your original files (`.steamvr`). Steam overlays like OVR Toolkit will no longer work.
 
-This app copies the **next waypoint** to the clipboard, but it does **not** paste it into Elite Dangerous by itself.
+### 3. OpenKneeboard Quickstart
 
-A common setup is to use **VoiceAttack** to send the clipboard contents into the galaxy map search field.
+1. Open **OpenKneeboard Settings** -> **Tabs**.
+2. Add a new **Image Directory** or **Single Image** tab.
+3. Link it directly to your **Kneeboard Output File** PNG path configured in Step 1.
+4. Bind a VR controller shortcut or hotkey in OpenKneeboard to toggle the kneeboard visibility in-game.
 
-Typical approach:
+### 4. VoiceAttack Automation (Optional but Recommended)
 
-1. Open the galaxy map
-2. Focus the search field
-3. Trigger a VoiceAttack command
-4. Let VoiceAttack send:
-   - paste shortcut
-   - confirm / search input
-   - optional extra key presses for your personal workflow
+The tool copies the next system to the clipboard but does **not** paste it into the game. Set up a VoiceAttack command with this macro workflow:
 
-This way, the waypoint copied by this tool can be inserted into the game with minimal manual work.
-
-> The exact VoiceAttack profile depends on your own keybinds and preferred galaxy map workflow.
+1. Open Galaxy Map (In-game shortcut).
+2. Focus the search field.
+3. **VoiceAttack Action:** Press `Ctrl + V` (Paste).
+4. **VoiceAttack Action:** Press `Enter` (Search / Plot Route).
 
 ---
 
-## Notes
+## Daily Workflow (How to Use)
 
-- The app does **not** paste waypoints into Elite Dangerous by itself
-- It only copies the next waypoint to the **clipboard**
-- To paste it into the galaxy map, use **VoiceAttack** or a similar tool
-- The generated PNG can be displayed with **OpenKneeboard**
-- VR DLL switching may require **administrator rights**
-- After a game update, **VR setup may need to be run again**
+Once the initial setup is done, your gameplay loop looks like this:
 
----
-
-## Known Issues
-
-- Very large journal files may slow down startup location detection
-- VR DLL switching can fail if the game folder is protected
-- After Elite Dangerous updates, the VR setup may need to be run again
-- Clipboard-based workflows depend on external tools such as VoiceAttack
-- Route matching may be less accurate if the current system is not directly part of the loaded route
+1. Generate your route on [spansh.co.uk](https://spansh.co.uk) and export it as a **JSON file**.
+2. Start this app and click **Load Route** to import the JSON.
+3. Click **Start** to begin monitoring.
+4. Launch Elite Dangerous and open OpenKneeboard.
+5. **Every time you jump:**
+   - The app automatically updates your progress.
+   - The OpenKneeboard image refreshes with your next targets.
+   - The next waypoint system name is copied to your clipboard.
+   - Trigger your VoiceAttack command inside the Galaxy Map to quickly paste the next route destination.
 
 ---
 
-## Recommended VR Setup
+## Tips, Limitations & Known Issues
 
-- **This app** for route tracking and image generation
-- **OpenKneeboard** for displaying the image in VR
-- **VoiceAttack** for inserting clipboard text into the galaxy map
-- **OpenXR DLL / OpenComposite** for OpenXR mode
+- **Admin Rights:** Swapping the VR DLL files may require running this application as an Administrator.
+- **Game Updates:** Whenever Elite Dangerous updates via Steam/Frontier, you might need to re-run the VR Setup step.
+- **Large Journals:** Very large journal logs can cause a slight delay in detecting your initial starting location.
+- **Route Accuracy:** Deviation from the planned Spansh route might temporarily lower route-matching accuracy until you return to the path.
 
 ---
 
 ## Disclaimer
 
-This is a helper utility for Elite Dangerous players.
-
-Use it at your own risk and always verify your paths, DLL files, and automation setup.
-
-Please note that this project is completely independent. Third-party tools and resources mentioned or integrated here—including **spansh.co.uk**, **OpenKneeboard**, **VoiceAttack** and the **OpenXR DLL**—are the property of their respective creators and are not affiliated with or developed by me.
+This is an independent helper utility. Use it at your own risk. Third-party tools mentioned (**spansh.co.uk**, **OpenKneeboard**, **VoiceAttack**, **OpenComposite**) are the property of their respective creators and are not affiliated with this project.
 
 ## License
 
-This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)** License.
-
-You are free to:
-
-- **Share** — copy and redistribute the material in any medium or format.
-- **Adapt** — remix, transform, and build upon the material.
-
-Under the following terms:
-
-- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
-- **NonCommercial** — You may not use the material for commercial purposes.
-- **ShareAlike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
-
-For more details, please see the full [Creative Commons Legal Code](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en).
+This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)** License. See the full [Creative Commons Legal Code](https://creativecommons.org) for details.
