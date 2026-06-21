@@ -104,6 +104,7 @@ Run the pre-compiled binary from the repository: `dist/ed_spansh_helper.exe`.
 4. (Optional) Build your own EXE:
 
    ```bash
+   pip install pyinstaller
    pyinstaller --noconsole --onefile ed_spansh_helper.py
    ```
 
