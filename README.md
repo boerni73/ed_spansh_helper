@@ -127,7 +127,9 @@ Follow these steps to configure the application for your first run.
 2. **OpenXR DLL Source:** Select the `openxr.dll` file you downloaded in the prerequisites step.
    ![Doc VR-Mode-Tab Setup 1](docs/images/vr_mode_setup1.png)
 3. **ED OpenVR Folder:** Select the folder containing your game's original `openvr_api.dll`.
+   - *Standard Odyssey Default:* `C:\Program Files (x86)\Frontier\Products\elite-dangerous-odyssey-64\Openvr\win64`
    - *Steam Odyssey Default:* `...\SteamApps\common\Elite Dangerous\Products\elite-dangerous-odyssey-64\Openvr\win64`
+
    ![Doc VR-Mode-Tab Setup 2](docs/images/vr_mode_setup2.png)
 4. Click **Setup/Re-Setup** when the warning appears.
    ![Doc VR-Mode-Tab Setup 3](docs/images/vr_mode_setup3.png)
@@ -139,10 +141,12 @@ Follow these steps to configure the application for your first run.
 
 ### 3. OpenKneeboard Quickstart
 
-1. Open **OpenKneeboard Settings** -> **Tabs**.
-2. Add a new **Image Directory** or **Single Image** tab.
-3. Link it directly to your **Kneeboard Output File** PNG path configured in Step 1.
-4. Bind a VR controller shortcut or hotkey in OpenKneeboard to toggle the kneeboard visibility in-game.
+1. Open **OpenKneeboard Settings** -> **Games**.
+2. Click **Add Game** and select or browse to your Elite Dangerous executable (`EliteDangerous64.exe`).
+3. Go to **Tabs** within settings.
+4. Add a new **Image Directory** or **Single Image** tab.
+5. Link it directly to your **Kneeboard Output File** PNG path configured in Step 1.
+6. Bind a VR controller shortcut or hotkey in OpenKneeboard to toggle the kneeboard visibility in-game.
 
 ### 4. VoiceAttack Automation (Optional but Recommended)
 
@@ -175,8 +179,6 @@ Once the initial setup is done, your gameplay loop looks like this:
 
 - **Admin Rights:** Swapping the VR DLL files may require running this application as an Administrator.
 - **Game Updates:** Whenever Elite Dangerous updates via Steam/Frontier, you might need to re-run the VR Setup step.
-- **Large Journals:** Very large journal logs can cause a slight delay in detecting your initial starting location.
-- **Route Accuracy:** Deviation from the planned Spansh route might temporarily lower route-matching accuracy until you return to the path.
 
 ---
 
