@@ -2425,11 +2425,11 @@ class EdSpanshApp:
         route_status_color = color_on if current_system_on_route else color_off
         route_dot_y = 30
         draw.ellipse(
-            [(820, route_dot_y), (846, route_dot_y + 26)],
+            [(810, route_dot_y), (836, route_dot_y + 26)],
             fill=route_status_color
         )
         draw.text(
-            (860, route_dot_y + 1),
+            (850, route_dot_y + 1),
             route_status_text,
             fill=ed_orange,
             font=font_medium
