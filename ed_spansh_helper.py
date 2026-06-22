@@ -2659,7 +2659,7 @@ class EdSpanshApp:
         value_mode="both",
     ):
         img_width = 1000
-        img_height = 445
+        img_height = 620
 
         bg_color = (6, 8, 12)
         line_dim = (80, 40, 0)
@@ -2671,18 +2671,33 @@ class EdSpanshApp:
         color_off = (231, 76, 60)
         table_header = (255, 170, 68)
         table_text = (240, 240, 245)
+        rocky_grey = (185, 185, 185)
+        water_blue = (80, 190, 255)
+        earthlike_cyan = (80, 255, 220)
+        ammonia_lime = (185, 220, 90)
+        hmc_orange = (255, 185, 90)
         font_name = "arial.ttf"
 
+        subtype_colors = {
+            "Earth-like world": earthlike_cyan,
+            "Water world": water_blue,
+            "Ammonia world": ammonia_lime,
+            "High metal content world": hmc_orange,
+            "Rocky body": rocky_grey,
+        }
+
         try:
-            font_big = ImageFont.truetype(font_name, 28)
-            font_medium = ImageFont.truetype(font_name, 22)
-            font_small = ImageFont.truetype(font_name, 18)
-            font_tiny = ImageFont.truetype(font_name, 15)
+            font_big = ImageFont.truetype(font_name, 32)
+            font_medium = ImageFont.truetype(font_name, 20)
+            font_tiny = ImageFont.truetype(font_name, 12)
+            font_table_header = ImageFont.truetype(font_name, 19)
+            font_table_row = ImageFont.truetype(font_name, 28)
         except IOError:
             font_big = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
             font_tiny = ImageFont.load_default()
+            font_table_header = ImageFont.load_default()
+            font_table_row = ImageFont.load_default()
 
         img = Image.new("RGB", (img_width, img_height), color=bg_color)
         draw = ImageDraw.Draw(img)
@@ -2690,36 +2705,36 @@ class EdSpanshApp:
         title_text = "ROAD TO RICHES"
         title_font = self._fit_font(
             draw, title_text, font_name,
-            start_size=24, min_size=16, max_width=600
+            start_size=18, min_size=12, max_width=420
         )
 
         current_system_text = str(current_system).upper()
         current_system_font = self._fit_font(
             draw, current_system_text, font_name,
-            start_size=26, min_size=14, max_width=760
+            start_size=16, min_size=10, max_width=760
         )
 
-        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
-        draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
+        draw.rectangle([(10, 10), (990, 610)], outline=ed_orange, width=2)
+        draw.rectangle([(22, 22), (978, 598)], outline=ed_orange_dim, width=1)
 
         draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
-        draw.line([(35, 122), (965, 122)], fill=line_dim, width=1)
-        draw.line([(35, 360), (965, 360)], fill=line_dim, width=1)
+        draw.line([(35, 108), (965, 108)], fill=line_dim, width=1)
+        draw.line([(35, 485), (965, 485)], fill=line_dim, width=1)
 
-        draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
-        draw.text((42, 78), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
-        draw.text((42, 96), current_system_text, fill=ed_cyan, font=current_system_font)
+        draw.text((40, 30), title_text, fill=ed_orange, font=title_font)
+        draw.text((42, 74), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
+        draw.text((42, 88), current_system_text, fill=ed_cyan, font=current_system_font)
 
         route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
         route_status_color = color_on if current_system_on_route else color_off
-        route_dot_y = 30
+        route_dot_y = 28
 
         draw.ellipse(
             [(810, route_dot_y), (836, route_dot_y + 26)],
             fill=route_status_color
         )
         draw.text(
-            (850, route_dot_y + 1),
+            (850, route_dot_y + 2),
             route_status_text,
             fill=ed_orange,
             font=font_medium
@@ -2727,86 +2742,88 @@ class EdSpanshApp:
 
         table_left = 45
         table_right = 955
-        table_top = 138
-        row_height = 28
+        table_top = 118
+        row_height = 52
 
         if value_mode == "scan":
             columns = [
                 ("BODY", 45, "left"),
-                ("DIST", 500, "right"),
-                ("SCAN", 700, "right"),
+                ("DIST", 560, "right"),
+                ("SCAN", 910, "right"),
             ]
         elif value_mode == "mapping":
             columns = [
                 ("BODY", 45, "left"),
-                ("DIST", 500, "right"),
-                ("MAP", 700, "right"),
+                ("DIST", 560, "right"),
+                ("MAP", 910, "right"),
             ]
         else:
             columns = [
                 ("BODY", 45, "left"),
-                ("DIST", 440, "right"),
-                ("SCAN", 660, "right"),
-                ("MAP", 860, "right"),
+                ("DIST", 520, "right"),
+                ("SCAN", 735, "right"),
+                ("MAP", 940, "right"),
             ]
 
         for header, x, align in columns:
             if align == "left":
-                draw.text((x, table_top), header, fill=table_header, font=font_small)
+                draw.text((x, table_top), header, fill=table_header, font=font_table_header)
             else:
-                text_width = self._get_text_width(draw, header, font_small)
-                draw.text((x - text_width, table_top), header, fill=table_header, font=font_small)
+                text_width = self._get_text_width(draw, header, font_table_header)
+                draw.text((x - text_width, table_top), header, fill=table_header, font=font_table_header)
 
-        draw.line([(table_left, table_top + 24), (table_right, table_top + 24)], fill=line_dim, width=1)
+        draw.line(
+            [(table_left, table_top + 30), (table_right, table_top + 30)],
+            fill=line_dim,
+            width=1
+        )
 
         max_rows = min(len(bodies), 6)
 
         for i in range(max_rows):
             body = bodies[i]
-            row_y = table_top + 34 + (i * row_height)
+            row_y = table_top + 42 + (i * row_height)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
+            subtype = str(body.get("subtype", "") or "")
             distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
             scan_value = int(body.get("estimated_scan_value", 0) or 0)
             mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
 
-            body_font = self._fit_font(
-                draw, display_body_name, font_name,
-                start_size=18, min_size=12, max_width=330
-            )
+            body_color = subtype_colors.get(subtype, table_text)
 
-            draw.text((45, row_y), display_body_name, fill=table_text, font=body_font)
+            draw.text((45, row_y), display_body_name, fill=body_color, font=font_table_row)
 
             dist_text = f"{self._format_int(distance_ls)} LS"
-            dist_width = self._get_text_width(draw, dist_text, font_small)
+            dist_width = self._get_text_width(draw, dist_text, font_table_row)
 
             if value_mode == "scan":
                 scan_text = self._format_int(scan_value)
-                scan_width = self._get_text_width(draw, scan_text, font_small)
+                scan_width = self._get_text_width(draw, scan_text, font_table_row)
 
-                draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
-                draw.text((700 - scan_width, row_y), scan_text, fill=ed_orange, font=font_small)
+                draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
+                draw.text((910 - scan_width, row_y), scan_text, fill=ed_orange, font=font_table_row)
 
             elif value_mode == "mapping":
                 map_text = self._format_int(mapping_value)
-                map_width = self._get_text_width(draw, map_text, font_small)
+                map_width = self._get_text_width(draw, map_text, font_table_row)
 
-                draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
-                draw.text((700 - map_width, row_y), map_text, fill=ed_orange, font=font_small)
+                draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
+                draw.text((910 - map_width, row_y), map_text, fill=ed_orange, font=font_table_row)
 
             else:
                 scan_text = self._format_int(scan_value)
                 map_text = self._format_int(mapping_value)
-                scan_width = self._get_text_width(draw, scan_text, font_small)
-                map_width = self._get_text_width(draw, map_text, font_small)
+                scan_width = self._get_text_width(draw, scan_text, font_table_row)
+                map_width = self._get_text_width(draw, map_text, font_table_row)
 
-                draw.text((440 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
-                draw.text((660 - scan_width, row_y), scan_text, fill=table_text, font=font_small)
-                draw.text((860 - map_width, row_y), map_text, fill=ed_orange, font=font_small)
+                draw.text((520 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
+                draw.text((735 - scan_width, row_y), scan_text, fill=table_text, font=font_table_row)
+                draw.text((940 - map_width, row_y), map_text, fill=ed_orange, font=font_table_row)
 
-        summary_y_label = 378
-        summary_y_value = 402
+        summary_y_label = 515
+        summary_y_value = 548
 
         body_count = int(totals.get("count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
@@ -2841,6 +2858,7 @@ class EdSpanshApp:
                 fill=table_text,
                 font=font_big
             )
+
             draw.text((650, summary_y_label), "MAP TOTAL", fill=ed_orange_dim, font=font_tiny)
             draw.text(
                 (650, summary_y_value),
@@ -2849,17 +2867,17 @@ class EdSpanshApp:
                 font=font_big
             )
 
-            draw.line([(250, 372), (250, 425)], fill=line_dim, width=1)
-            draw.line([(610, 372), (610, 425)], fill=line_dim, width=1)
+            draw.line([(250, 505), (250, 585)], fill=line_dim, width=1)
+            draw.line([(610, 505), (610, 585)], fill=line_dim, width=1)
 
         draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
         draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
         draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
         draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
-        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
-        draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
-        draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
+        draw.line([(22, 568), (22, 598)], fill=ed_orange, width=2)
+        draw.line([(22, 598), (52, 598)], fill=ed_orange, width=2)
+        draw.line([(948, 598), (978, 598)], fill=ed_orange, width=2)
+        draw.line([(978, 568), (978, 598)], fill=ed_orange, width=2)
 
         output_dir = os.path.dirname(self.kneeboard_output_img_file)
         if output_dir:
