@@ -108,6 +108,8 @@ class EdSpanshApp:
 
         self.my_route = []
         self.route_index = 0
+        self.route_type = "UNKNOWN"
+        self.r2r_value_mode = "both"
         self.monitoring_active = False
         self.is_paused = False
         self.stop_requested = False
@@ -121,6 +123,7 @@ class EdSpanshApp:
             self.ship_builds_raw,
             self.vr_versions,
             self.openxr_dll_source,
+            self.r2r_value_mode,
         ) = self.load_settings()
 
         self.ship_builds = []
@@ -254,6 +257,7 @@ class EdSpanshApp:
         ship_builds = []
         vr_versions = []
         openxr_dll_source = ""
+        r2r_value_mode = "both"
 
         if os.path.exists(SETTINGS_FILE):
             try:
@@ -269,6 +273,7 @@ class EdSpanshApp:
                     DEFAULT_KNEEBOARD_OUTPUT_IMG_FILE,
                 )
                 openxr_dll_source = s.get("openxr_dll_source", "")
+                r2r_value_mode = s.get("r2r_value_mode", "both")
                 vr_versions = self.normalize_vr_versions(s.get("vr_versions", []))
 
                 if not vr_versions:
@@ -307,6 +312,9 @@ class EdSpanshApp:
 
         vr_versions = self.normalize_vr_versions(vr_versions)
 
+        if r2r_value_mode not in ("scan", "mapping", "both"):
+            r2r_value_mode = "both"
+
         return (
             theme,
             journal_dir,
@@ -315,6 +323,7 @@ class EdSpanshApp:
             ship_builds,
             vr_versions,
             openxr_dll_source,
+            r2r_value_mode,
         )
 
     def save_settings(self):
@@ -333,6 +342,7 @@ class EdSpanshApp:
                         "ship_builds": self.ship_builds_raw,
                         "vr_versions": self.vr_versions,
                         "openxr_dll_source": self.openxr_dll_source,
+                        "r2r_value_mode": self.r2r_value_mode,
                     },
                     f,
                     indent=2,
@@ -1444,25 +1454,36 @@ class EdSpanshApp:
 
             raw_jumps = []
             route_type = "Unknown Spansh Route"
+            result_data = route_data.get("result")
 
-            if "result" in route_data and "jumps" in route_data["result"]:
-                raw_jumps = route_data["result"]["jumps"]
+            if isinstance(result_data, dict) and "jumps" in result_data:
+                raw_jumps = result_data["jumps"]
                 route_type = "Galaxy Plotter"
-            elif "result" in route_data and "system_jumps" in route_data["result"]:
-                raw_jumps = route_data["result"]["system_jumps"]
+
+            elif isinstance(result_data, dict) and "system_jumps" in result_data:
+                raw_jumps = result_data["system_jumps"]
                 route_type = "Neutron Plotter"
+
+            elif isinstance(result_data, list):
+                raw_jumps = result_data
+                route_type = "Road to Riches / Exobiology"
+
             elif "jumps" in route_data:
                 raw_jumps = route_data["jumps"]
                 route_type = "Standard Jump Route"
+
             elif "systems" in route_data:
                 raw_jumps = route_data["systems"]
                 route_type = "Road to Riches / Exobiology"
-            elif "result" in route_data and "systems" in route_data["result"]:
-                raw_jumps = route_data["result"]["systems"]
+
+            elif isinstance(result_data, dict) and "systems" in result_data:
+                raw_jumps = result_data["systems"]
                 route_type = "Road to Riches / Exobiology (API)"
+
             elif "route" in route_data:
                 raw_jumps = route_data["route"]
                 route_type = "Fleet Carrier Route"
+
             else:
                 raise ValueError(
                     "Unknown Spansh JSON structure. Could not find a jumps or systems list."
@@ -1502,6 +1523,7 @@ class EdSpanshApp:
                     "x": float(item.get("x", 0.0) or 0.0),
                     "y": float(item.get("y", 0.0) or 0.0),
                     "z": float(item.get("z", 0.0) or 0.0),
+                    "bodies": item.get("bodies", []),
                 })
 
             if not parsed_route:
@@ -1509,6 +1531,7 @@ class EdSpanshApp:
 
             self.my_route = parsed_route
             self.route_index = 0
+            self.route_type = route_type
             self.last_route_file = file_path
 
             route_rows = self.build_route_table_data(route_type, raw_jumps)
@@ -1645,6 +1668,37 @@ class EdSpanshApp:
             relief="flat", bd=2, padx=10, pady=3,
             font=("Arial", 9, "bold"),
         ).grid(row=3, column=1, sticky="ew", padx=(0, 12), pady=(0, 8))
+
+        tk.Label(
+            tab_files,
+            text="Road to Riches Value Display:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", padx=12, pady=(10, 2))
+
+        r2r_mode_map = {
+            "Scan only": "scan",
+            "Mapping only": "mapping",
+            "Scan + Mapping": "both",
+        }
+        r2r_mode_reverse_map = {v: k for k, v in r2r_mode_map.items()}
+
+        r2r_mode_var = tk.StringVar(
+            value=r2r_mode_reverse_map.get(self.r2r_value_mode, "Scan + Mapping")
+        )
+
+        r2r_mode_dropdown = ttk.Combobox(
+            tab_files,
+            textvariable=r2r_mode_var,
+            state="readonly",
+            values=list(r2r_mode_map.keys()),
+            style="Orange.TCombobox",
+            width=28,
+        )
+        r2r_mode_dropdown.grid(
+            row=5, column=0, columnspan=2,
+            sticky="w", padx=12, pady=(0, 8)
+        )
 
         # ==============================================================
         # Tab 2: VR Mode
@@ -2086,6 +2140,7 @@ class EdSpanshApp:
             self.kneeboard_output_img_file = kneeboard_var.get().strip()
             self.openxr_dll_source = openxr_source_var.get().strip()
             self.vr_versions = self.normalize_vr_versions(vr_versions_tmp)
+            self.r2r_value_mode = r2r_mode_map.get(r2r_mode_var.get(), "both")
 
             self.save_settings()
             self.log("Settings saved.")
@@ -2093,6 +2148,7 @@ class EdSpanshApp:
             self.log(f"  Kneeboard   : {self.kneeboard_output_img_file}")
             self.log(f"  OpenXR DLL  : {self.openxr_dll_source}")
             self.log(f"  VR Versions : {len(self.vr_versions)}")
+            self.log(f"  R2R Mode    : {self.r2r_value_mode}")
             dialog.destroy()
 
         tk.Button(
@@ -2259,6 +2315,80 @@ class EdSpanshApp:
     # ------------------------------------------------------------------
     # Route logic
     # ------------------------------------------------------------------
+    def get_route_entry_by_name(self, system_name):
+        if not system_name:
+            return None
+
+        system_name_lc = str(system_name).strip().lower()
+
+        for entry in self.my_route:
+            entry_name = str(entry.get("name", "")).strip().lower()
+            if entry_name == system_name_lc:
+                return entry
+
+        return None
+
+    def get_r2r_display_bodies(self, system_name, max_rows=6):
+        route_entry = self.get_route_entry_by_name(system_name)
+        if not route_entry:
+            return []
+
+        bodies = route_entry.get("bodies", [])
+        if not isinstance(bodies, list):
+            return []
+
+        valid_bodies = [body for body in bodies if isinstance(body, dict)]
+
+        if self.r2r_value_mode == "scan":
+            sorted_bodies = sorted(
+                valid_bodies,
+                key=lambda body: (
+                    int(body.get("estimated_scan_value", 0) or 0),
+                    int(body.get("estimated_mapping_value", 0) or 0),
+                    -(float(body.get("distance_to_arrival", 0) or 0)),
+                ),
+                reverse=True,
+            )
+        else:
+            sorted_bodies = sorted(
+                valid_bodies,
+                key=lambda body: (
+                    int(body.get("estimated_mapping_value", 0) or 0),
+                    int(body.get("estimated_scan_value", 0) or 0),
+                    -(float(body.get("distance_to_arrival", 0) or 0)),
+                ),
+                reverse=True,
+            )
+
+        return sorted_bodies[:max_rows]
+
+    def get_r2r_totals(self, system_name):
+        route_entry = self.get_route_entry_by_name(system_name)
+        if not route_entry:
+            return {
+                "count": 0,
+                "scan_total": 0,
+                "mapping_total": 0,
+            }
+
+        bodies = route_entry.get("bodies", [])
+        if not isinstance(bodies, list):
+            bodies = []
+
+        valid_bodies = [body for body in bodies if isinstance(body, dict)]
+
+        return {
+            "count": len(valid_bodies),
+            "scan_total": sum(
+                int(body.get("estimated_scan_value", 0) or 0)
+                for body in valid_bodies
+            ),
+            "mapping_total": sum(
+                int(body.get("estimated_mapping_value", 0) or 0)
+                for body in valid_bodies
+            ),
+        }
+
     def distance(self, destination_coord, current_coord):
         dest_x, dest_y, dest_z = destination_coord
         current_x, current_y, current_z = current_coord
@@ -2356,6 +2486,12 @@ class EdSpanshApp:
             return ImageFont.truetype(font_name, min_size)
         except IOError:
             return ImageFont.load_default()
+
+    def _format_int(self, value):
+        try:
+            return f"{int(value):n}"
+        except Exception:
+            return "0"
 
     def gen_galaxy_plotter_image(
         self,
@@ -2499,6 +2635,222 @@ class EdSpanshApp:
 
         draw.line([(320, 330), (320, 400)], fill=line_dim, width=1)
         draw.line([(645, 330), (645, 400)], fill=line_dim, width=1)
+
+        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
+        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
+        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
+        draw.line([(22, 393), (22, 423)], fill=ed_orange, width=2)
+        draw.line([(22, 423), (52, 423)], fill=ed_orange, width=2)
+        draw.line([(948, 423), (978, 423)], fill=ed_orange, width=2)
+        draw.line([(978, 393), (978, 423)], fill=ed_orange, width=2)
+
+        output_dir = os.path.dirname(self.kneeboard_output_img_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        img.save(self.kneeboard_output_img_file)
+
+    def gen_road_to_riches_image(
+        self,
+        current_system,
+        current_system_on_route,
+        bodies,
+        totals,
+        value_mode="both",
+    ):
+        img_width = 1000
+        img_height = 445
+
+        bg_color = (6, 8, 12)
+        line_dim = (80, 40, 0)
+        ed_orange = (255, 115, 0)
+        ed_orange_soft = (220, 100, 0)
+        ed_orange_dim = (150, 70, 0)
+        ed_cyan = (89, 223, 227)
+        color_on = (40, 210, 110)
+        color_off = (231, 76, 60)
+        table_header = (255, 170, 68)
+        table_text = (240, 240, 245)
+        font_name = "arial.ttf"
+
+        try:
+            font_big = ImageFont.truetype(font_name, 28)
+            font_medium = ImageFont.truetype(font_name, 22)
+            font_small = ImageFont.truetype(font_name, 18)
+            font_tiny = ImageFont.truetype(font_name, 15)
+        except IOError:
+            font_big = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+            font_tiny = ImageFont.load_default()
+
+        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        draw = ImageDraw.Draw(img)
+
+        title_text = "ROAD TO RICHES"
+        title_font = self._fit_font(
+            draw, title_text, font_name,
+            start_size=24, min_size=16, max_width=600
+        )
+
+        current_system_text = str(current_system).upper()
+        current_system_font = self._fit_font(
+            draw, current_system_text, font_name,
+            start_size=26, min_size=14, max_width=760
+        )
+
+        draw.rectangle([(10, 10), (990, 435)], outline=ed_orange, width=2)
+        draw.rectangle([(22, 22), (978, 423)], outline=ed_orange_dim, width=1)
+
+        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
+        draw.line([(35, 122), (965, 122)], fill=line_dim, width=1)
+        draw.line([(35, 360), (965, 360)], fill=line_dim, width=1)
+
+        draw.text((40, 28), title_text, fill=ed_orange, font=title_font)
+        draw.text((42, 78), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
+        draw.text((42, 96), current_system_text, fill=ed_cyan, font=current_system_font)
+
+        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
+        route_status_color = color_on if current_system_on_route else color_off
+        route_dot_y = 30
+
+        draw.ellipse(
+            [(810, route_dot_y), (836, route_dot_y + 26)],
+            fill=route_status_color
+        )
+        draw.text(
+            (850, route_dot_y + 1),
+            route_status_text,
+            fill=ed_orange,
+            font=font_medium
+        )
+
+        table_left = 45
+        table_right = 955
+        table_top = 138
+        row_height = 28
+
+        if value_mode == "scan":
+            columns = [
+                ("BODY", 45, "left"),
+                ("DIST", 500, "right"),
+                ("SCAN", 700, "right"),
+            ]
+        elif value_mode == "mapping":
+            columns = [
+                ("BODY", 45, "left"),
+                ("DIST", 500, "right"),
+                ("MAP", 700, "right"),
+            ]
+        else:
+            columns = [
+                ("BODY", 45, "left"),
+                ("DIST", 440, "right"),
+                ("SCAN", 660, "right"),
+                ("MAP", 860, "right"),
+            ]
+
+        for header, x, align in columns:
+            if align == "left":
+                draw.text((x, table_top), header, fill=table_header, font=font_small)
+            else:
+                text_width = self._get_text_width(draw, header, font_small)
+                draw.text((x - text_width, table_top), header, fill=table_header, font=font_small)
+
+        draw.line([(table_left, table_top + 24), (table_right, table_top + 24)], fill=line_dim, width=1)
+
+        max_rows = min(len(bodies), 6)
+
+        for i in range(max_rows):
+            body = bodies[i]
+            row_y = table_top + 34 + (i * row_height)
+
+            body_name = str(body.get("name", "") or "")
+            display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
+            distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
+            scan_value = int(body.get("estimated_scan_value", 0) or 0)
+            mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
+
+            body_font = self._fit_font(
+                draw, display_body_name, font_name,
+                start_size=18, min_size=12, max_width=330
+            )
+
+            draw.text((45, row_y), display_body_name, fill=table_text, font=body_font)
+
+            dist_text = f"{self._format_int(distance_ls)} LS"
+            dist_width = self._get_text_width(draw, dist_text, font_small)
+
+            if value_mode == "scan":
+                scan_text = self._format_int(scan_value)
+                scan_width = self._get_text_width(draw, scan_text, font_small)
+
+                draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
+                draw.text((700 - scan_width, row_y), scan_text, fill=ed_orange, font=font_small)
+
+            elif value_mode == "mapping":
+                map_text = self._format_int(mapping_value)
+                map_width = self._get_text_width(draw, map_text, font_small)
+
+                draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
+                draw.text((700 - map_width, row_y), map_text, fill=ed_orange, font=font_small)
+
+            else:
+                scan_text = self._format_int(scan_value)
+                map_text = self._format_int(mapping_value)
+                scan_width = self._get_text_width(draw, scan_text, font_small)
+                map_width = self._get_text_width(draw, map_text, font_small)
+
+                draw.text((440 - dist_width, row_y), dist_text, fill=table_text, font=font_small)
+                draw.text((660 - scan_width, row_y), scan_text, fill=table_text, font=font_small)
+                draw.text((860 - map_width, row_y), map_text, fill=ed_orange, font=font_small)
+
+        summary_y_label = 378
+        summary_y_value = 402
+
+        body_count = int(totals.get("count", 0) or 0)
+        scan_total = int(totals.get("scan_total", 0) or 0)
+        mapping_total = int(totals.get("mapping_total", 0) or 0)
+
+        draw.text((60, summary_y_label), "BODIES", fill=ed_orange_dim, font=font_tiny)
+        draw.text((60, summary_y_value), f"{body_count}", fill=ed_orange, font=font_big)
+
+        if value_mode == "scan":
+            draw.text((360, summary_y_label), "SCAN TOTAL", fill=ed_orange_dim, font=font_tiny)
+            draw.text(
+                (360, summary_y_value),
+                self._format_int(scan_total),
+                fill=ed_orange,
+                font=font_big
+            )
+
+        elif value_mode == "mapping":
+            draw.text((360, summary_y_label), "MAP TOTAL", fill=ed_orange_dim, font=font_tiny)
+            draw.text(
+                (360, summary_y_value),
+                self._format_int(mapping_total),
+                fill=ed_orange,
+                font=font_big
+            )
+
+        else:
+            draw.text((300, summary_y_label), "SCAN TOTAL", fill=ed_orange_dim, font=font_tiny)
+            draw.text(
+                (300, summary_y_value),
+                self._format_int(scan_total),
+                fill=table_text,
+                font=font_big
+            )
+            draw.text((650, summary_y_label), "MAP TOTAL", fill=ed_orange_dim, font=font_tiny)
+            draw.text(
+                (650, summary_y_value),
+                self._format_int(mapping_total),
+                fill=ed_orange,
+                font=font_big
+            )
+
+            draw.line([(250, 372), (250, 425)], fill=line_dim, width=1)
+            draw.line([(610, 372), (610, 425)], fill=line_dim, width=1)
 
         draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
         draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
@@ -2773,19 +3125,33 @@ class EdSpanshApp:
             self.log(f"Copied next waypoint to clipboard: {next_stop}")
 
         try:
-            self.gen_galaxy_plotter_image(
-                current_system=system_name,
-                current_system_on_route=on_route,
-                system_name=next_stop,
-                destination=destination,
-                jump_distance=jump_dist,
-                jumps_remain=jumps_remain,
-                distance_remain=distance_to_destination,
-                distance_traveled=round(self.total_distance_traveled, 2),
-                scoopable_star=scoopable,
-                neutron_star=has_neutron,
-            )
+            if self.route_type.startswith("Road to Riches"):
+                r2r_bodies = self.get_r2r_display_bodies(system_name)
+                r2r_totals = self.get_r2r_totals(system_name)
+
+                self.gen_road_to_riches_image(
+                    current_system=system_name,
+                    current_system_on_route=on_route,
+                    bodies=r2r_bodies,
+                    totals=r2r_totals,
+                    value_mode=self.r2r_value_mode,
+                )
+            else:
+                self.gen_galaxy_plotter_image(
+                    current_system=system_name,
+                    current_system_on_route=on_route,
+                    system_name=next_stop,
+                    destination=destination,
+                    jump_distance=jump_dist,
+                    jumps_remain=jumps_remain,
+                    distance_remain=distance_to_destination,
+                    distance_traveled=round(self.total_distance_traveled, 2),
+                    scoopable_star=scoopable,
+                    neutron_star=has_neutron,
+                )
+
             self.refresh_dashboard_image()
+
         except Exception as e:
             self.log(f"Image generation error: {e}")
 
