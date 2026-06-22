@@ -2440,16 +2440,22 @@ class EdSpanshApp:
         draw.text((45, 178), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_small)
         draw.text((45, 205), next_text, fill=ed_orange, font=next_font)
 
-        scoop_color = (
-            color_unknown if scoopable_star is None
-            else (color_on if scoopable_star else color_off)
-        )
         neutron_color = color_on if neutron_star else color_off
 
-        draw.ellipse([(55, 265), (81, 291)], fill=scoop_color)
-        draw.text((95, 266), "SCOOPABLE", fill=ed_orange, font=font_medium)
-        draw.ellipse([(310, 265), (336, 291)], fill=neutron_color)
-        draw.text((350, 266), "NEUTRON STAR", fill=ed_orange, font=font_medium)
+        if scoopable_star is None:
+            neutron_dot_x = 55
+            neutron_text_x = 95
+        else:
+            scoop_color = color_on if scoopable_star else color_off
+
+            draw.ellipse([(55, 265), (81, 291)], fill=scoop_color)
+            draw.text((95, 266), "SCOOPABLE", fill=ed_orange, font=font_medium)
+
+            neutron_dot_x = 310
+            neutron_text_x = 350
+
+        draw.ellipse([(neutron_dot_x, 265), (neutron_dot_x + 26, 291)], fill=neutron_color)
+        draw.text((neutron_text_x, 266), "NEUTRON STAR", fill=ed_orange, font=font_medium)
 
         metric_label_y = 335
         metric_value_y = 362
