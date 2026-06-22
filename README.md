@@ -43,7 +43,7 @@ I originally created this tool to solve a specific pain point in Virtual Reality
 
 ### Development Note
 
-This project was built with significant assistance from Large Language Models (LLMs) for writing, refactoring, and restructuring the codebase based on my custom logic and ideas.
+This project was built with a lot of help from Large Language Models (LLMs). While the core ideas and custom logic are mine, LLMs assisted heavily in writing, refactoring, and restructuring almost the entire codebase.
 
 ---
 
