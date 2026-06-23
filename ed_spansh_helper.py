@@ -19,7 +19,6 @@ import math
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, ttk
-from pprint import pprint, pformat
 
 import tkinterdnd2
 from tkinterdnd2 import DND_FILES
@@ -2521,7 +2520,6 @@ class EdSpanshApp:
         ed_cyan = (89, 223, 227)
         color_on = (40, 210, 110)
         color_off = (231, 76, 60)
-        color_unknown = (128, 128, 128)
         font_name = "arial.ttf"
 
         try:
