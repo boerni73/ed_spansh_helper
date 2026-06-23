@@ -104,7 +104,7 @@ class EdSpanshApp:
         self.root = root
         self.root.title("Elite Dangerous - Spansh VR Navigator")
         self.root.geometry("1500x950")
-        self.root.minsize(1200, 650)
+        self.root.minsize(1200, 1100)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.my_route = []
