@@ -61,9 +61,12 @@ This project was built with a lot of help from Large Language Models (LLMs). Whi
 
 ![Main Window](docs/images/main_window.png)
 
-### Generated Navigation Image
-
+### Generated Navigation Images
+# Galaxy-/Neutron Plotter
 ![Generated Navigation Image](docs/images/navigation_image.png)
+
+# Road to Riches
+![Generated Navigation Image](docs/images/r2r_image.png)
 
 ---
 
