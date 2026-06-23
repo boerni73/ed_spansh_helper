@@ -176,14 +176,14 @@ class EdSpanshApp:
 
         for version_name in versions_needing_setup:
             self.log(f"VR setup required: {version_name}")
-        self.log("Go to Settings > VR Mode and run 'Setup / Re-Setup'.")
+        self.log("Go to Settings > VR Runtime and run 'Setup / Re-Setup'.")
 
         version_list = "\n".join(f"  • {name}" for name in versions_needing_setup)
         messagebox.showwarning(
             "VR setup required",
             f"The OpenVR DLL setup still needs to be completed for:\n\n"
             f"{version_list}\n\n"
-            f"Please open Settings > VR Mode and run 'Setup / Re-Setup'.",
+            f"Please open Settings > VR Runtime and run 'Setup / Re-Setup'.",
             parent=self.root,
         )
 
@@ -1588,10 +1588,10 @@ class EdSpanshApp:
         notebook.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
         # ==============================================================
-        # Tab 1: File Locations
+        # Tab 1: General Settings
         # ==============================================================
         tab_files = tk.Frame(notebook, bg="#000000")
-        notebook.add(tab_files, text="  File Locations  ")
+        notebook.add(tab_files, text="  General Settings  ")
         tab_files.columnconfigure(0, weight=1)
         tab_files.columnconfigure(1, weight=0)
 
@@ -1702,10 +1702,10 @@ class EdSpanshApp:
         )
 
         # ==============================================================
-        # Tab 2: VR Mode
+        # Tab 2: VR Runtime
         # ==============================================================
         tab_vr = tk.Frame(notebook, bg="#000000")
-        notebook.add(tab_vr, text="  VR Mode  ")
+        notebook.add(tab_vr, text="  VR Runtime  ")
         tab_vr.columnconfigure(0, weight=1)
         tab_vr.columnconfigure(1, weight=0)
         tab_vr.columnconfigure(2, weight=0)
@@ -2085,9 +2085,9 @@ class EdSpanshApp:
             update_status(entry.get("path", ""))
 
             if ok:
-                messagebox.showinfo("VR Mode", msg, parent=dialog)
+                messagebox.showinfo("VR Runtime", msg, parent=dialog)
             else:
-                messagebox.showerror("VR Mode Error", msg, parent=dialog)
+                messagebox.showerror("VR Runtime Error", msg, parent=dialog)
 
         setup_btn = tk.Button(
             action_row, text="Setup / Re-Setup",
