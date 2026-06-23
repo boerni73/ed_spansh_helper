@@ -19,6 +19,7 @@ import math
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, ttk
+from pprint import pprint, pformat
 
 import tkinterdnd2
 from tkinterdnd2 import DND_FILES
@@ -1105,7 +1106,7 @@ class EdSpanshApp:
             with Image.open(self.kneeboard_output_img_file) as img:
                 img = img.copy()
 
-            max_width, max_height = 700, 320
+            max_width, max_height = 700, 520
             width, height = img.size
             scale = min(max_width / width, max_height / height, 1.0)
             new_size = (int(width * scale), int(height * scale))
@@ -2328,7 +2329,7 @@ class EdSpanshApp:
 
         return None
 
-    def get_r2r_display_bodies(self, system_name, max_rows=6):
+    def get_r2r_display_bodies(self, system_name, max_rows=None):
         route_entry = self.get_route_entry_by_name(system_name)
         if not route_entry:
             return []
@@ -2359,6 +2360,9 @@ class EdSpanshApp:
                 ),
                 reverse=True,
             )
+
+        if max_rows is None:
+            return sorted_bodies
 
         return sorted_bodies[:max_rows]
 
@@ -2654,12 +2658,22 @@ class EdSpanshApp:
         self,
         current_system,
         current_system_on_route,
+        next_waypoint,
         bodies,
         totals,
         value_mode="both",
     ):
-        img_width = 1000
-        img_height = 620
+        base_img_width = 1000
+        base_img_height = 620
+        row_height = 52
+        base_rows = 6
+
+        body_count_for_layout = max(len(bodies), base_rows)
+        extra_rows = max(0, body_count_for_layout - base_rows)
+        height_extra = extra_rows * row_height
+
+        img_width = base_img_width
+        img_height = base_img_height + height_extra
 
         bg_color = (6, 8, 12)
         line_dim = (80, 40, 0)
@@ -2711,19 +2725,39 @@ class EdSpanshApp:
         current_system_text = str(current_system).upper()
         current_system_font = self._fit_font(
             draw, current_system_text, font_name,
-            start_size=16, min_size=10, max_width=760
+            start_size=16, min_size=10, max_width=380
         )
 
-        draw.rectangle([(10, 10), (990, 610)], outline=ed_orange, width=2)
-        draw.rectangle([(22, 22), (978, 598)], outline=ed_orange_dim, width=1)
+        next_waypoint_text = str(next_waypoint).upper() if next_waypoint else "-"
+        next_waypoint_font = self._fit_font(
+            draw, next_waypoint_text, font_name,
+            start_size=16, min_size=10, max_width=380
+        )
+
+        outer_bottom = 610 + height_extra
+        inner_bottom = 598 + height_extra
+        summary_line_y = 485 + height_extra
+        summary_y_label = 500 + height_extra
+        summary_y_value = 528 + height_extra
+        summary_vline_top = 496 + height_extra
+        summary_vline_bottom = 565 + height_extra
+        bottom_corner_top = 568 + height_extra
+        bottom_corner_bottom = 598 + height_extra
+
+        draw.rectangle([(10, 10), (990, outer_bottom)], outline=ed_orange, width=2)
+        draw.rectangle([(22, 22), (978, inner_bottom)], outline=ed_orange_dim, width=1)
 
         draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
         draw.line([(35, 108), (965, 108)], fill=line_dim, width=1)
-        draw.line([(35, 485), (965, 485)], fill=line_dim, width=1)
+        draw.line([(35, summary_line_y), (965, summary_line_y)], fill=line_dim, width=1)
 
         draw.text((40, 30), title_text, fill=ed_orange, font=title_font)
+
         draw.text((42, 74), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
         draw.text((42, 88), current_system_text, fill=ed_cyan, font=current_system_font)
+
+        draw.text((520, 74), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_tiny)
+        draw.text((520, 88), next_waypoint_text, fill=ed_orange, font=next_waypoint_font)
 
         route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
         route_status_color = color_on if current_system_on_route else color_off
@@ -2743,7 +2777,6 @@ class EdSpanshApp:
         table_left = 45
         table_right = 955
         table_top = 118
-        row_height = 52
 
         if value_mode == "scan":
             columns = [
@@ -2778,10 +2811,7 @@ class EdSpanshApp:
             width=1
         )
 
-        max_rows = min(len(bodies), 6)
-
-        for i in range(max_rows):
-            body = bodies[i]
+        for i, body in enumerate(bodies):
             row_y = table_top + 42 + (i * row_height)
 
             body_name = str(body.get("name", "") or "")
@@ -2821,9 +2851,6 @@ class EdSpanshApp:
                 draw.text((520 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
                 draw.text((735 - scan_width, row_y), scan_text, fill=table_text, font=font_table_row)
                 draw.text((940 - map_width, row_y), map_text, fill=ed_orange, font=font_table_row)
-
-        summary_y_label = 515
-        summary_y_value = 548
 
         body_count = int(totals.get("count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
@@ -2867,17 +2894,17 @@ class EdSpanshApp:
                 font=font_big
             )
 
-            draw.line([(250, 505), (250, 585)], fill=line_dim, width=1)
-            draw.line([(610, 505), (610, 585)], fill=line_dim, width=1)
+            draw.line([(250, summary_vline_top), (250, summary_vline_bottom)], fill=line_dim, width=1)
+            draw.line([(610, summary_vline_top), (610, summary_vline_bottom)], fill=line_dim, width=1)
 
         draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
         draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
         draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
         draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, 568), (22, 598)], fill=ed_orange, width=2)
-        draw.line([(22, 598), (52, 598)], fill=ed_orange, width=2)
-        draw.line([(948, 598), (978, 598)], fill=ed_orange, width=2)
-        draw.line([(978, 568), (978, 598)], fill=ed_orange, width=2)
+        draw.line([(22, bottom_corner_top), (22, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(22, bottom_corner_bottom), (52, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(948, bottom_corner_bottom), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(978, bottom_corner_top), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
 
         output_dir = os.path.dirname(self.kneeboard_output_img_file)
         if output_dir:
@@ -3150,6 +3177,7 @@ class EdSpanshApp:
                 self.gen_road_to_riches_image(
                     current_system=system_name,
                     current_system_on_route=on_route,
+                    next_waypoint=next_stop,
                     bodies=r2r_bodies,
                     totals=r2r_totals,
                     value_mode=self.r2r_value_mode,
