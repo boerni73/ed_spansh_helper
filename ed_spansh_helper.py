@@ -1439,6 +1439,28 @@ class EdSpanshApp:
 
         return route_rows
 
+    def detect_systems_route_type(self, raw_systems):
+        for system in raw_systems:
+            if not isinstance(system, dict):
+                continue
+
+            bodies = system.get("bodies", [])
+            if not isinstance(bodies, list):
+                continue
+
+            for body in bodies:
+                if not isinstance(body, dict):
+                    continue
+
+                if int(body.get("landmark_value", 0) or 0) > 0:
+                    return "Exobiology"
+
+                landmarks = body.get("landmarks", [])
+                if isinstance(landmarks, list) and landmarks:
+                    return "Exobiology"
+
+        return "Road to Riches"
+
     def read_route_file(self):
         file_path = self.file_entry.get().strip()
         if not file_path or not os.path.exists(file_path):
@@ -1466,7 +1488,7 @@ class EdSpanshApp:
 
             elif isinstance(result_data, list):
                 raw_jumps = result_data
-                route_type = "Road to Riches / Exobiology"
+                route_type = self.detect_systems_route_type(raw_jumps)
 
             elif "jumps" in route_data:
                 raw_jumps = route_data["jumps"]
@@ -1474,11 +1496,11 @@ class EdSpanshApp:
 
             elif "systems" in route_data:
                 raw_jumps = route_data["systems"]
-                route_type = "Road to Riches / Exobiology"
+                route_type = self.detect_systems_route_type(raw_jumps)
 
             elif isinstance(result_data, dict) and "systems" in result_data:
                 raw_jumps = result_data["systems"]
-                route_type = "Road to Riches / Exobiology (API)"
+                route_type = self.detect_systems_route_type(raw_jumps)
 
             elif "route" in route_data:
                 raw_jumps = route_data["route"]
@@ -2392,6 +2414,83 @@ class EdSpanshApp:
             ),
         }
 
+    def _get_primary_landmark_subtype(self, body):
+        landmarks = body.get("landmarks", [])
+        if not isinstance(landmarks, list):
+            return "-"
+
+        valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+        if not valid_landmarks:
+            return "-"
+
+        best = max(
+            valid_landmarks,
+            key=lambda lm: (
+                int(lm.get("value", 0) or 0),
+                int(lm.get("count", 0) or 0),
+                str(lm.get("subtype", "") or ""),
+            ),
+        )
+        return str(best.get("subtype", "-") or "-")
+
+    def get_exobiology_display_bodies(self, system_name, max_rows=None):
+        route_entry = self.get_route_entry_by_name(system_name)
+        if not route_entry:
+            return []
+
+        bodies = route_entry.get("bodies", [])
+        if not isinstance(bodies, list):
+            return []
+
+        valid_bodies = [
+            body for body in bodies
+            if isinstance(body, dict) and (
+                int(body.get("landmark_value", 0) or 0) > 0
+                or (isinstance(body.get("landmarks", []), list) and body.get("landmarks"))
+            )
+        ]
+
+        sorted_bodies = sorted(
+            valid_bodies,
+            key=lambda body: (
+                -int(body.get("landmark_value", 0) or 0),
+                float(body.get("distance_to_arrival", 0) or 0),
+                str(body.get("name", "") or ""),
+            ),
+        )
+
+        if max_rows is None:
+            return sorted_bodies
+        return sorted_bodies[:max_rows]
+
+    def get_exobiology_totals(self, system_name):
+        route_entry = self.get_route_entry_by_name(system_name)
+        if not route_entry:
+            return {
+                "count": 0,
+                "landmark_total": 0,
+            }
+
+        bodies = route_entry.get("bodies", [])
+        if not isinstance(bodies, list):
+            bodies = []
+
+        valid_bodies = [
+            body for body in bodies
+            if isinstance(body, dict) and (
+                int(body.get("landmark_value", 0) or 0) > 0
+                or (isinstance(body.get("landmarks", []), list) and body.get("landmarks"))
+            )
+        ]
+
+        return {
+            "count": len(valid_bodies),
+            "landmark_total": sum(
+                int(body.get("landmark_value", 0) or 0)
+                for body in valid_bodies
+            ),
+        }
+
     def distance(self, destination_coord, current_coord):
         dest_x, dest_y, dest_z = destination_coord
         current_x, current_y, current_z = current_coord
@@ -2909,6 +3008,207 @@ class EdSpanshApp:
             os.makedirs(output_dir, exist_ok=True)
         img.save(self.kneeboard_output_img_file)
 
+    def gen_exobiology_image(
+        self,
+        current_system,
+        current_system_on_route,
+        next_waypoint,
+        bodies,
+        totals,
+    ):
+        base_img_width = 1000
+        base_img_height = 620
+        row_height = 52
+        base_rows = 6
+
+        body_count_for_layout = max(len(bodies), base_rows)
+        extra_rows = max(0, body_count_for_layout - base_rows)
+        height_extra = extra_rows * row_height
+
+        img_width = base_img_width
+        img_height = base_img_height + height_extra
+
+        bg_color = (6, 8, 12)
+        line_dim = (80, 40, 0)
+        ed_orange = (255, 115, 0)
+        ed_orange_soft = (220, 100, 0)
+        ed_orange_dim = (150, 70, 0)
+        ed_cyan = (89, 223, 227)
+        color_on = (40, 210, 110)
+        color_off = (231, 76, 60)
+        table_header = (255, 170, 68)
+        table_text = (240, 240, 245)
+        font_name = "arial.ttf"
+
+        try:
+            font_big = ImageFont.truetype(font_name, 32)
+            font_medium = ImageFont.truetype(font_name, 20)
+            font_tiny = ImageFont.truetype(font_name, 12)
+            font_table_header = ImageFont.truetype(font_name, 19)
+            font_table_row = ImageFont.truetype(font_name, 24)
+        except IOError:
+            font_big = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+            font_tiny = ImageFont.load_default()
+            font_table_header = ImageFont.load_default()
+            font_table_row = ImageFont.load_default()
+
+        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        draw = ImageDraw.Draw(img)
+
+        title_text = "EXOBIOLOGY"
+        title_font = self._fit_font(
+            draw, title_text, font_name,
+            start_size=18, min_size=12, max_width=420
+        )
+
+        current_system_text = str(current_system).upper()
+        current_system_font = self._fit_font(
+            draw, current_system_text, font_name,
+            start_size=16, min_size=10, max_width=380
+        )
+
+        next_waypoint_text = str(next_waypoint).upper() if next_waypoint else "-"
+        next_waypoint_font = self._fit_font(
+            draw, next_waypoint_text, font_name,
+            start_size=16, min_size=10, max_width=380
+        )
+
+        outer_bottom = 610 + height_extra
+        inner_bottom = 598 + height_extra
+        summary_line_y = 485 + height_extra
+        summary_y_label = 500 + height_extra
+        summary_y_value = 528 + height_extra
+        summary_vline_top = 496 + height_extra
+        summary_vline_bottom = 565 + height_extra
+        bottom_corner_top = 568 + height_extra
+        bottom_corner_bottom = 598 + height_extra
+
+        draw.rectangle([(10, 10), (990, outer_bottom)], outline=ed_orange, width=2)
+        draw.rectangle([(22, 22), (978, inner_bottom)], outline=ed_orange_dim, width=1)
+
+        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
+        draw.line([(35, 108), (965, 108)], fill=line_dim, width=1)
+        draw.line([(35, summary_line_y), (965, summary_line_y)], fill=line_dim, width=1)
+
+        draw.text((40, 30), title_text, fill=ed_orange, font=title_font)
+
+        draw.text((42, 74), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
+        draw.text((42, 88), current_system_text, fill=ed_cyan, font=current_system_font)
+
+        draw.text((520, 74), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_tiny)
+        draw.text((520, 88), next_waypoint_text, fill=ed_orange, font=next_waypoint_font)
+
+        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
+        route_status_color = color_on if current_system_on_route else color_off
+        route_dot_y = 28
+
+        draw.ellipse(
+            [(810, route_dot_y), (836, route_dot_y + 26)],
+            fill=route_status_color
+        )
+        draw.text(
+            (850, route_dot_y + 2),
+            route_status_text,
+            fill=ed_orange,
+            font=font_medium
+        )
+
+        table_left = 45
+        table_right = 955
+        table_top = 118
+
+        columns = [
+            ("BODY", 45, "left"),
+            ("DIST", 560, "right"),
+            ("LANDMARK", 740, "right"),
+            ("SUBTYPE", 765, "left"),
+        ]
+
+        for header, x, align in columns:
+            if align == "left":
+                draw.text((x, table_top), header, fill=table_header, font=font_table_header)
+            else:
+                text_width = self._get_text_width(draw, header, font_table_header)
+                draw.text((x - text_width, table_top), header, fill=table_header, font=font_table_header)
+
+        draw.line(
+            [(table_left, table_top + 30), (table_right, table_top + 30)],
+            fill=line_dim,
+            width=1
+        )
+
+        for i, body in enumerate(bodies):
+            row_y = table_top + 42 + (i * row_height)
+
+            body_name = str(body.get("name", "") or "")
+            display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
+            subtype = str(body.get("subtype", "") or "")
+            body_color = self._get_body_subtype_color(subtype)
+
+            distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
+            landmark_value = int(body.get("landmark_value", 0) or 0)
+            landmark_subtype = self._get_primary_landmark_subtype(body)
+
+            body_font = self._fit_font(
+                draw,
+                display_body_name,
+                font_name,
+                start_size=24,
+                min_size=12,
+                max_width=430,
+            )
+            subtype_font = self._fit_font(
+                draw,
+                landmark_subtype,
+                font_name,
+                start_size=18,
+                min_size=10,
+                max_width=180,
+            )
+
+            draw.text((45, row_y), display_body_name, fill=body_color, font=body_font)
+
+            dist_text = f"{self._format_int(distance_ls)} LS"
+            value_text = self._format_int(landmark_value)
+
+            dist_width = self._get_text_width(draw, dist_text, font_table_row)
+            value_width = self._get_text_width(draw, value_text, font_table_row)
+
+            draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
+            draw.text((740 - value_width, row_y), value_text, fill=ed_orange, font=font_table_row)
+            draw.text((765, row_y + 4), landmark_subtype, fill=table_text, font=subtype_font)
+
+        body_count = int(totals.get("count", 0) or 0)
+        landmark_total = int(totals.get("landmark_total", 0) or 0)
+
+        draw.text((60, summary_y_label), "BODIES", fill=ed_orange_dim, font=font_tiny)
+        draw.text((60, summary_y_value), f"{body_count}", fill=ed_orange, font=font_big)
+
+        draw.text((400, summary_y_label), "LANDMARK TOTAL", fill=ed_orange_dim, font=font_tiny)
+        draw.text(
+            (400, summary_y_value),
+            self._format_int(landmark_total),
+            fill=ed_orange,
+            font=font_big
+        )
+
+        draw.line([(320, summary_vline_top), (320, summary_vline_bottom)], fill=line_dim, width=1)
+
+        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
+        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
+        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
+        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
+        draw.line([(22, bottom_corner_top), (22, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(22, bottom_corner_bottom), (52, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(948, bottom_corner_bottom), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
+        draw.line([(978, bottom_corner_top), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
+
+        output_dir = os.path.dirname(self.kneeboard_output_img_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        img.save(self.kneeboard_output_img_file)
+
     def gen_destination_reached_image(
         self,
         current_system,
@@ -3168,7 +3468,19 @@ class EdSpanshApp:
             self.log(f"Copied next waypoint to clipboard: {next_stop}")
 
         try:
-            if self.route_type.startswith("Road to Riches"):
+            if self.route_type.startswith("Exobiology"):
+                exo_bodies = self.get_exobiology_display_bodies(system_name)
+                exo_totals = self.get_exobiology_totals(system_name)
+
+                self.gen_exobiology_image(
+                    current_system=system_name,
+                    current_system_on_route=on_route,
+                    next_waypoint=next_stop,
+                    bodies=exo_bodies,
+                    totals=exo_totals,
+                )
+
+            elif self.route_type.startswith("Road to Riches"):
                 r2r_bodies = self.get_r2r_display_bodies(system_name)
                 r2r_totals = self.get_r2r_totals(system_name)
 
