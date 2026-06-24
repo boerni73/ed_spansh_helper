@@ -96,6 +96,16 @@ THEMES = {
 
 
 class EdSpanshApp:
+    TABLE_ROW_HEIGHT = 52
+
+    EXO_BODY_FONT_START = 24
+    EXO_BODY_FONT_MIN = 12
+    EXO_BODY_MAX_WIDTH = 360
+
+    EXO_SUBTYPE_FONT_START = 18
+    EXO_SUBTYPE_FONT_MIN = 10
+    EXO_SUBTYPE_MAX_WIDTH = 200
+
     # ------------------------------------------------------------------
     # Application lifecycle
     # ------------------------------------------------------------------
@@ -2657,9 +2667,12 @@ class EdSpanshApp:
         body_count,
         base_img_width=1000,
         base_img_height=620,
-        row_height=52,
+        row_height=None,
         base_rows=6,
     ):
+        if row_height is None:
+            row_height = self.TABLE_ROW_HEIGHT
+
         body_count_for_layout = max(int(body_count or 0), base_rows)
         extra_rows = max(0, body_count_for_layout - base_rows)
         height_extra = extra_rows * row_height
@@ -3088,7 +3101,7 @@ class EdSpanshApp:
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * 52)
+            row_y = table_top + 42 + (i * self.TABLE_ROW_HEIGHT)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -3360,7 +3373,7 @@ class EdSpanshApp:
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * 52)
+            row_y = table_top + 42 + (i * self.TABLE_ROW_HEIGHT)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -3375,17 +3388,18 @@ class EdSpanshApp:
                 draw,
                 display_body_name,
                 font_name,
-                start_size=24,
-                min_size=12,
-                max_width=360,
+                start_size=self.EXO_BODY_FONT_START,
+                min_size=self.EXO_BODY_FONT_MIN,
+                max_width=self.EXO_BODY_MAX_WIDTH,
             )
+
             subtype_font = self._fit_font(
                 draw,
                 landmark_subtype,
                 font_name,
-                start_size=18,
-                min_size=10,
-                max_width=200,
+                start_size=self.EXO_SUBTYPE_FONT_START,
+                min_size=self.EXO_SUBTYPE_FONT_MIN,
+                max_width=self.EXO_SUBTYPE_MAX_WIDTH,
             )
 
             draw.text(
