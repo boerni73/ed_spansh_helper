@@ -96,7 +96,27 @@ THEMES = {
 
 
 class EdSpanshApp:
+    NAV_FONT_NAME = "arial.ttf"
+
+    TABLE_LEFT = 45
+    TABLE_RIGHT = 955
+    TABLE_TOP = 118
+    TABLE_FIRST_ROW_Y_OFFSET = 42
     TABLE_ROW_HEIGHT = 52
+
+    R2R_COL_BODY_X = 45
+
+    R2R_SINGLE_COL_DIST_X = 560
+    R2R_SINGLE_COL_VALUE_X = 910
+
+    R2R_BOTH_COL_DIST_X = 520
+    R2R_BOTH_COL_SCAN_X = 735
+    R2R_BOTH_COL_MAP_X = 940
+
+    EXO_COL_BODY_X = 45
+    EXO_COL_DIST_X = 500
+    EXO_COL_VALUE_X = 710
+    EXO_COL_SUBTYPE_X = 740
 
     EXO_BODY_FONT_START = 24
     EXO_BODY_FONT_MIN = 12
@@ -2697,6 +2717,9 @@ class EdSpanshApp:
             return "-"
 
         jumps = int(next_waypoint_jumps or 0)
+        if jumps <= 0:
+            return str(next_waypoint).upper()
+
         jump_label = "JUMP" if jumps == 1 else "JUMPS"
         return f"{str(next_waypoint).upper()} ({jumps} {jump_label})"
 
@@ -2865,6 +2888,82 @@ class EdSpanshApp:
                 fill=colors["line_dim"],
                 width=1
             )
+
+    def _get_table_row_y(self, table_top, row_index):
+        return table_top + self.TABLE_FIRST_ROW_Y_OFFSET + (row_index * self.TABLE_ROW_HEIGHT)
+
+    def _get_r2r_columns(self, value_mode):
+        if value_mode == "scan":
+            return [
+                ("BODY", 45, "left"),
+                ("DIST", 560, "right"),
+                ("SCAN", 910, "right"),
+            ]
+        elif value_mode == "mapping":
+            return [
+                ("BODY", 45, "left"),
+                ("DIST", 560, "right"),
+                ("MAP", 910, "right"),
+            ]
+        else:
+            return [
+                ("BODY", 45, "left"),
+                ("DIST", 520, "right"),
+                ("SCAN", 735, "right"),
+                ("MAP", 940, "right"),
+            ]
+
+    def _get_exobiology_columns(self):
+        return [
+            ("BODY", self.EXO_COL_BODY_X, "left"),
+            ("DIST", self.EXO_COL_DIST_X, "right"),
+            ("LANDMARK VALUE", self.EXO_COL_VALUE_X, "right"),
+            ("LANDMARK SUBTYPE", self.EXO_COL_SUBTYPE_X, "left"),
+        ]
+
+    def _get_r2r_columns(self, value_mode):
+        if value_mode == "scan":
+            return [
+                ("BODY", self.R2R_COL_BODY_X, "left"),
+                ("DIST", self.R2R_SINGLE_COL_DIST_X, "right"),
+                ("SCAN", self.R2R_SINGLE_COL_VALUE_X, "right"),
+            ]
+        elif value_mode == "mapping":
+            return [
+                ("BODY", self.R2R_COL_BODY_X, "left"),
+                ("DIST", self.R2R_SINGLE_COL_DIST_X, "right"),
+                ("MAP", self.R2R_SINGLE_COL_VALUE_X, "right"),
+            ]
+        else:
+            return [
+                ("BODY", self.R2R_COL_BODY_X, "left"),
+                ("DIST", self.R2R_BOTH_COL_DIST_X, "right"),
+                ("SCAN", self.R2R_BOTH_COL_SCAN_X, "right"),
+                ("MAP", self.R2R_BOTH_COL_MAP_X, "right"),
+            ]
+
+    def _get_r2r_value_positions(self, value_mode):
+        if value_mode == "scan":
+            return {
+                "body_x": self.R2R_COL_BODY_X,
+                "dist_x": self.R2R_SINGLE_COL_DIST_X,
+                "scan_x": self.R2R_SINGLE_COL_VALUE_X,
+                "map_x": None,
+            }
+        elif value_mode == "mapping":
+            return {
+                "body_x": self.R2R_COL_BODY_X,
+                "dist_x": self.R2R_SINGLE_COL_DIST_X,
+                "scan_x": None,
+                "map_x": self.R2R_SINGLE_COL_VALUE_X,
+            }
+        else:
+            return {
+                "body_x": self.R2R_COL_BODY_X,
+                "dist_x": self.R2R_BOTH_COL_DIST_X,
+                "scan_x": self.R2R_BOTH_COL_SCAN_X,
+                "map_x": self.R2R_BOTH_COL_MAP_X,
+            }
 
     def _save_kneeboard_image(self, img):
         output_dir = os.path.dirname(self.kneeboard_output_img_file)
@@ -3041,7 +3140,6 @@ class EdSpanshApp:
         colors = self._get_nav_image_palette()
         fonts = self._load_nav_image_fonts()
         layout = self._get_tabular_nav_layout(len(bodies))
-        font_name = "arial.ttf"
 
         img = Image.new(
             "RGB",
@@ -3066,29 +3164,11 @@ class EdSpanshApp:
             fonts=fonts,
         )
 
-        table_left = 45
-        table_right = 955
-        table_top = 118
-
-        if value_mode == "scan":
-            columns = [
-                ("BODY", 45, "left"),
-                ("DIST", 560, "right"),
-                ("SCAN", 910, "right"),
-            ]
-        elif value_mode == "mapping":
-            columns = [
-                ("BODY", 45, "left"),
-                ("DIST", 560, "right"),
-                ("MAP", 910, "right"),
-            ]
-        else:
-            columns = [
-                ("BODY", 45, "left"),
-                ("DIST", 520, "right"),
-                ("SCAN", 735, "right"),
-                ("MAP", 940, "right"),
-            ]
+        table_left = self.TABLE_LEFT
+        table_right = self.TABLE_RIGHT
+        table_top = self.TABLE_TOP
+        columns = self._get_r2r_columns(value_mode)
+        positions = self._get_r2r_value_positions(value_mode)
 
         self._draw_table_headers(
             draw=draw,
@@ -3101,7 +3181,7 @@ class EdSpanshApp:
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * self.TABLE_ROW_HEIGHT)
+            row_y = self._get_table_row_y(table_top, i)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -3113,7 +3193,7 @@ class EdSpanshApp:
             body_color = self._get_body_subtype_color(subtype)
 
             draw.text(
-                (45, row_y),
+                (positions["body_x"], row_y),
                 display_body_name,
                 fill=body_color,
                 font=fonts["table_row"]
@@ -3127,13 +3207,13 @@ class EdSpanshApp:
                 scan_width = self._get_text_width(draw, scan_text, fonts["table_row"])
 
                 draw.text(
-                    (560 - dist_width, row_y),
+                    (positions["dist_x"] - dist_width, row_y),
                     dist_text,
                     fill=colors["table_text"],
                     font=fonts["table_row"]
                 )
                 draw.text(
-                    (910 - scan_width, row_y),
+                    (positions["scan_x"] - scan_width, row_y),
                     scan_text,
                     fill=colors["ed_orange"],
                     font=fonts["table_row"]
@@ -3144,13 +3224,13 @@ class EdSpanshApp:
                 map_width = self._get_text_width(draw, map_text, fonts["table_row"])
 
                 draw.text(
-                    (560 - dist_width, row_y),
+                    (positions["dist_x"] - dist_width, row_y),
                     dist_text,
                     fill=colors["table_text"],
                     font=fonts["table_row"]
                 )
                 draw.text(
-                    (910 - map_width, row_y),
+                    (positions["map_x"] - map_width, row_y),
                     map_text,
                     fill=colors["ed_orange"],
                     font=fonts["table_row"]
@@ -3163,84 +3243,23 @@ class EdSpanshApp:
                 map_width = self._get_text_width(draw, map_text, fonts["table_row"])
 
                 draw.text(
-                    (520 - dist_width, row_y),
+                    (positions["dist_x"] - dist_width, row_y),
                     dist_text,
                     fill=colors["table_text"],
                     font=fonts["table_row"]
                 )
                 draw.text(
-                    (735 - scan_width, row_y),
+                    (positions["scan_x"] - scan_width, row_y),
                     scan_text,
                     fill=colors["table_text"],
                     font=fonts["table_row"]
                 )
                 draw.text(
-                    (940 - map_width, row_y),
+                    (positions["map_x"] - map_width, row_y),
                     map_text,
                     fill=colors["ed_orange"],
                     font=fonts["table_row"]
                 )
-
-        body_count = int(totals.get("count", 0) or 0)
-        scan_total = int(totals.get("scan_total", 0) or 0)
-        mapping_total = int(totals.get("mapping_total", 0) or 0)
-
-        if value_mode == "scan":
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 360,
-                    "label": "SCAN TOTAL",
-                    "value": self._format_int(scan_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = []
-
-        elif value_mode == "mapping":
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 360,
-                    "label": "MAP TOTAL",
-                    "value": self._format_int(mapping_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = []
-
-        else:
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 300,
-                    "label": "SCAN TOTAL",
-                    "value": self._format_int(scan_total),
-                    "color": colors["table_text"],
-                },
-                {
-                    "x": 650,
-                    "label": "MAP TOTAL",
-                    "value": self._format_int(mapping_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = [250, 610]
 
         body_count = int(totals.get("count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
@@ -3326,7 +3345,7 @@ class EdSpanshApp:
         colors = self._get_nav_image_palette()
         fonts = self._load_nav_image_fonts()
         layout = self._get_tabular_nav_layout(len(bodies))
-        font_name = "arial.ttf"
+        font_name = self.NAV_FONT_NAME
 
         img = Image.new(
             "RGB",
@@ -3351,16 +3370,10 @@ class EdSpanshApp:
             fonts=fonts,
         )
 
-        table_left = 45
-        table_right = 955
-        table_top = 118
-
-        columns = [
-            ("BODY", 45, "left"),
-            ("DIST", 500, "right"),
-            ("LANDMARK VALUE", 710, "right"),
-            ("LANDMARK SUBTYPE", 740, "left"),
-        ]
+        table_left = self.TABLE_LEFT
+        table_right = self.TABLE_RIGHT
+        table_top = self.TABLE_TOP
+        columns = self._get_exobiology_columns()
 
         self._draw_table_headers(
             draw=draw,
@@ -3373,7 +3386,7 @@ class EdSpanshApp:
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * self.TABLE_ROW_HEIGHT)
+            row_y = self._get_table_row_y(table_top, i)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -3392,7 +3405,6 @@ class EdSpanshApp:
                 min_size=self.EXO_BODY_FONT_MIN,
                 max_width=self.EXO_BODY_MAX_WIDTH,
             )
-
             subtype_font = self._fit_font(
                 draw,
                 landmark_subtype,
@@ -3403,7 +3415,7 @@ class EdSpanshApp:
             )
 
             draw.text(
-                (45, row_y),
+                (self.EXO_COL_BODY_X, row_y),
                 display_body_name,
                 fill=body_color,
                 font=body_font
@@ -3416,19 +3428,19 @@ class EdSpanshApp:
             value_width = self._get_text_width(draw, value_text, fonts["table_row"])
 
             draw.text(
-                (500 - dist_width, row_y),
+                (self.EXO_COL_DIST_X - dist_width, row_y),
                 dist_text,
                 fill=colors["table_text"],
                 font=fonts["table_row"]
             )
             draw.text(
-                (710 - value_width, row_y),
+                (self.EXO_COL_VALUE_X - value_width, row_y),
                 value_text,
                 fill=colors["ed_orange"],
                 font=fonts["table_row"]
             )
             draw.text(
-                (740, row_y + 4),
+                (self.EXO_COL_SUBTYPE_X, row_y + 4),
                 landmark_subtype,
                 fill=colors["table_text"],
                 font=subtype_font
