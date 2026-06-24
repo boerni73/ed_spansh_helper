@@ -2619,6 +2619,246 @@ class EdSpanshApp:
         }
         return subtype_colors.get(str(subtype or ""), table_text)
 
+    def _get_nav_image_palette(self):
+        return {
+            "bg_color": (6, 8, 12),
+            "line_dim": (80, 40, 0),
+            "ed_orange": (255, 115, 0),
+            "ed_orange_soft": (220, 100, 0),
+            "ed_orange_dim": (150, 70, 0),
+            "ed_cyan": (89, 223, 227),
+            "color_on": (40, 210, 110),
+            "color_off": (231, 76, 60),
+            "table_header": (255, 170, 68),
+            "table_text": (240, 240, 245),
+        }
+
+    def _load_nav_image_fonts(self, font_name="arial.ttf"):
+        try:
+            return {
+                "big": ImageFont.truetype(font_name, 32),
+                "medium": ImageFont.truetype(font_name, 20),
+                "tiny": ImageFont.truetype(font_name, 12),
+                "table_header": ImageFont.truetype(font_name, 19),
+                "table_row": ImageFont.truetype(font_name, 28),
+            }
+        except IOError:
+            default_font = ImageFont.load_default()
+            return {
+                "big": default_font,
+                "medium": default_font,
+                "tiny": default_font,
+                "table_header": default_font,
+                "table_row": default_font,
+            }
+
+    def _get_tabular_nav_layout(
+        self,
+        body_count,
+        base_img_width=1000,
+        base_img_height=620,
+        row_height=52,
+        base_rows=6,
+    ):
+        body_count_for_layout = max(int(body_count or 0), base_rows)
+        extra_rows = max(0, body_count_for_layout - base_rows)
+        height_extra = extra_rows * row_height
+
+        return {
+            "img_width": base_img_width,
+            "img_height": base_img_height + height_extra,
+            "height_extra": height_extra,
+            "outer_bottom": 610 + height_extra,
+            "inner_bottom": 598 + height_extra,
+            "summary_line_y": 485 + height_extra,
+            "summary_y_label": 500 + height_extra,
+            "summary_y_value": 528 + height_extra,
+            "summary_vline_top": 496 + height_extra,
+            "summary_vline_bottom": 565 + height_extra,
+            "bottom_corner_top": 568 + height_extra,
+            "bottom_corner_bottom": 598 + height_extra,
+        }
+
+    def _format_next_waypoint_text(self, next_waypoint, next_waypoint_jumps=0):
+        if not next_waypoint:
+            return "-"
+
+        jumps = int(next_waypoint_jumps or 0)
+        jump_label = "JUMP" if jumps == 1 else "JUMPS"
+        return f"{str(next_waypoint).upper()} ({jumps} {jump_label})"
+
+    def _draw_nav_corner_accents(self, draw, bottom_corner_top, bottom_corner_bottom, colors):
+        draw.line([(22, 22), (52, 22)], fill=colors["ed_orange"], width=2)
+        draw.line([(22, 22), (22, 52)], fill=colors["ed_orange"], width=2)
+        draw.line([(948, 22), (978, 22)], fill=colors["ed_orange"], width=2)
+        draw.line([(978, 22), (978, 52)], fill=colors["ed_orange"], width=2)
+        draw.line(
+            [(22, bottom_corner_top), (22, bottom_corner_bottom)],
+            fill=colors["ed_orange"],
+            width=2
+        )
+        draw.line(
+            [(22, bottom_corner_bottom), (52, bottom_corner_bottom)],
+            fill=colors["ed_orange"],
+            width=2
+        )
+        draw.line(
+            [(948, bottom_corner_bottom), (978, bottom_corner_bottom)],
+            fill=colors["ed_orange"],
+            width=2
+        )
+        draw.line(
+            [(978, bottom_corner_top), (978, bottom_corner_bottom)],
+            fill=colors["ed_orange"],
+            width=2
+        )
+
+    def _draw_tabular_nav_frame(self, draw, layout, colors):
+        draw.rectangle(
+            [(10, 10), (990, layout["outer_bottom"])],
+            outline=colors["ed_orange"],
+            width=2
+        )
+        draw.rectangle(
+            [(22, 22), (978, layout["inner_bottom"])],
+            outline=colors["ed_orange_dim"],
+            width=1
+        )
+
+        draw.line([(35, 68), (965, 68)], fill=colors["ed_orange_dim"], width=1)
+        draw.line([(35, 108), (965, 108)], fill=colors["line_dim"], width=1)
+        draw.line(
+            [(35, layout["summary_line_y"]), (965, layout["summary_line_y"])],
+            fill=colors["line_dim"],
+            width=1
+        )
+
+        self._draw_nav_corner_accents(
+            draw,
+            layout["bottom_corner_top"],
+            layout["bottom_corner_bottom"],
+            colors,
+        )
+
+    def _draw_tabular_nav_header(
+        self,
+        draw,
+        title_text,
+        current_system,
+        next_waypoint_text,
+        current_system_on_route,
+        colors,
+        fonts,
+        font_name="arial.ttf",
+    ):
+        title_font = self._fit_font(
+            draw, title_text, font_name,
+            start_size=18, min_size=12, max_width=420
+        )
+        current_system_font = self._fit_font(
+            draw, str(current_system).upper(), font_name,
+            start_size=16, min_size=10, max_width=380
+        )
+        next_waypoint_font = self._fit_font(
+            draw, str(next_waypoint_text), font_name,
+            start_size=16, min_size=10, max_width=380
+        )
+
+        draw.text((40, 30), title_text, fill=colors["ed_orange"], font=title_font)
+
+        draw.text(
+            (42, 74),
+            "CURRENT SYSTEM",
+            fill=colors["ed_orange_soft"],
+            font=fonts["tiny"]
+        )
+        draw.text(
+            (42, 88),
+            str(current_system).upper(),
+            fill=colors["ed_cyan"],
+            font=current_system_font
+        )
+
+        draw.text(
+            (520, 74),
+            "NEXT WAYPOINT",
+            fill=colors["ed_orange_soft"],
+            font=fonts["tiny"]
+        )
+        draw.text(
+            (520, 88),
+            str(next_waypoint_text),
+            fill=colors["ed_orange"],
+            font=next_waypoint_font
+        )
+
+        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
+        route_status_color = colors["color_on"] if current_system_on_route else colors["color_off"]
+
+        route_dot_y = 28
+        draw.ellipse(
+            [(810, route_dot_y), (836, route_dot_y + 26)],
+            fill=route_status_color
+        )
+        draw.text(
+            (850, route_dot_y + 2),
+            route_status_text,
+            fill=colors["ed_orange"],
+            font=fonts["medium"]
+        )
+
+    def _draw_table_headers(self, draw, table_top, table_left, table_right, columns, colors, fonts):
+        for header, x, align in columns:
+            if align == "left":
+                draw.text(
+                    (x, table_top),
+                    header,
+                    fill=colors["table_header"],
+                    font=fonts["table_header"]
+                )
+            else:
+                text_width = self._get_text_width(draw, header, fonts["table_header"])
+                draw.text(
+                    (x - text_width, table_top),
+                    header,
+                    fill=colors["table_header"],
+                    font=fonts["table_header"]
+                )
+
+        draw.line(
+            [(table_left, table_top + 30), (table_right, table_top + 30)],
+            fill=colors["line_dim"],
+            width=1
+        )
+
+    def _draw_summary_blocks(self, draw, items, layout, colors, fonts, separators=None):
+        for item in items:
+            draw.text(
+                (item["x"], layout["summary_y_label"]),
+                item["label"],
+                fill=colors["ed_orange_dim"],
+                font=fonts["tiny"]
+            )
+            draw.text(
+                (item["x"], layout["summary_y_value"]),
+                str(item["value"]),
+                fill=item.get("color", colors["ed_orange"]),
+                font=fonts["big"]
+            )
+
+        for x in (separators or []):
+            draw.line(
+                [(x, layout["summary_vline_top"]), (x, layout["summary_vline_bottom"])],
+                fill=colors["line_dim"],
+                width=1
+            )
+
+    def _save_kneeboard_image(self, img):
+        output_dir = os.path.dirname(self.kneeboard_output_img_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        img.save(self.kneeboard_output_img_file)
+
     def gen_galaxy_plotter_image(
         self,
         current_system,
@@ -2785,110 +3025,32 @@ class EdSpanshApp:
         value_mode="both",
         next_waypoint_jumps=0,
     ):
-        base_img_width = 1000
-        base_img_height = 620
-        row_height = 52
-        base_rows = 6
-
-        body_count_for_layout = max(len(bodies), base_rows)
-        extra_rows = max(0, body_count_for_layout - base_rows)
-        height_extra = extra_rows * row_height
-
-        img_width = base_img_width
-        img_height = base_img_height + height_extra
-
-        bg_color = (6, 8, 12)
-        line_dim = (80, 40, 0)
-        ed_orange = (255, 115, 0)
-        ed_orange_soft = (220, 100, 0)
-        ed_orange_dim = (150, 70, 0)
-        ed_cyan = (89, 223, 227)
-        color_on = (40, 210, 110)
-        color_off = (231, 76, 60)
-        table_header = (255, 170, 68)
-        table_text = (240, 240, 245)
+        colors = self._get_nav_image_palette()
+        fonts = self._load_nav_image_fonts()
+        layout = self._get_tabular_nav_layout(len(bodies))
         font_name = "arial.ttf"
 
-        try:
-            font_big = ImageFont.truetype(font_name, 32)
-            font_medium = ImageFont.truetype(font_name, 20)
-            font_tiny = ImageFont.truetype(font_name, 12)
-            font_table_header = ImageFont.truetype(font_name, 19)
-            font_table_row = ImageFont.truetype(font_name, 28)
-        except IOError:
-            font_big = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
-            font_tiny = ImageFont.load_default()
-            font_table_header = ImageFont.load_default()
-            font_table_row = ImageFont.load_default()
-
-        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img = Image.new(
+            "RGB",
+            (layout["img_width"], layout["img_height"]),
+            color=colors["bg_color"]
+        )
         draw = ImageDraw.Draw(img)
 
-        title_text = "ROAD TO RICHES"
-        title_font = self._fit_font(
-            draw, title_text, font_name,
-            start_size=18, min_size=12, max_width=420
+        next_waypoint_text = self._format_next_waypoint_text(
+            next_waypoint,
+            next_waypoint_jumps,
         )
 
-        current_system_text = str(current_system).upper()
-        current_system_font = self._fit_font(
-            draw, current_system_text, font_name,
-            start_size=16, min_size=10, max_width=380
-        )
-
-        if next_waypoint:
-            jump_label = "JUMP" if int(next_waypoint_jumps or 0) == 1 else "JUMPS"
-            next_waypoint_text = (
-                f"{str(next_waypoint).upper()} "
-                f"({int(next_waypoint_jumps or 0)} {jump_label})"
-            )
-        else:
-            next_waypoint_text = "-"
-
-        next_waypoint_font = self._fit_font(
-            draw, next_waypoint_text, font_name,
-            start_size=16, min_size=10, max_width=380
-        )
-
-        outer_bottom = 610 + height_extra
-        inner_bottom = 598 + height_extra
-        summary_line_y = 485 + height_extra
-        summary_y_label = 500 + height_extra
-        summary_y_value = 528 + height_extra
-        summary_vline_top = 496 + height_extra
-        summary_vline_bottom = 565 + height_extra
-        bottom_corner_top = 568 + height_extra
-        bottom_corner_bottom = 598 + height_extra
-
-        draw.rectangle([(10, 10), (990, outer_bottom)], outline=ed_orange, width=2)
-        draw.rectangle([(22, 22), (978, inner_bottom)], outline=ed_orange_dim, width=1)
-
-        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
-        draw.line([(35, 108), (965, 108)], fill=line_dim, width=1)
-        draw.line([(35, summary_line_y), (965, summary_line_y)], fill=line_dim, width=1)
-
-        draw.text((40, 30), title_text, fill=ed_orange, font=title_font)
-
-        draw.text((42, 74), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
-        draw.text((42, 88), current_system_text, fill=ed_cyan, font=current_system_font)
-
-        draw.text((520, 74), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_tiny)
-        draw.text((520, 88), next_waypoint_text, fill=ed_orange, font=next_waypoint_font)
-
-        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
-        route_status_color = color_on if current_system_on_route else color_off
-        route_dot_y = 28
-
-        draw.ellipse(
-            [(810, route_dot_y), (836, route_dot_y + 26)],
-            fill=route_status_color
-        )
-        draw.text(
-            (850, route_dot_y + 2),
-            route_status_text,
-            fill=ed_orange,
-            font=font_medium
+        self._draw_tabular_nav_frame(draw, layout, colors)
+        self._draw_tabular_nav_header(
+            draw=draw,
+            title_text="ROAD TO RICHES",
+            current_system=current_system,
+            next_waypoint_text=next_waypoint_text,
+            current_system_on_route=current_system_on_route,
+            colors=colors,
+            fonts=fonts,
         )
 
         table_left = 45
@@ -2915,21 +3077,18 @@ class EdSpanshApp:
                 ("MAP", 940, "right"),
             ]
 
-        for header, x, align in columns:
-            if align == "left":
-                draw.text((x, table_top), header, fill=table_header, font=font_table_header)
-            else:
-                text_width = self._get_text_width(draw, header, font_table_header)
-                draw.text((x - text_width, table_top), header, fill=table_header, font=font_table_header)
-
-        draw.line(
-            [(table_left, table_top + 30), (table_right, table_top + 30)],
-            fill=line_dim,
-            width=1
+        self._draw_table_headers(
+            draw=draw,
+            table_top=table_top,
+            table_left=table_left,
+            table_right=table_right,
+            columns=columns,
+            colors=colors,
+            fonts=fonts,
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * row_height)
+            row_y = table_top + 42 + (i * 52)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -2938,96 +3097,209 @@ class EdSpanshApp:
             scan_value = int(body.get("estimated_scan_value", 0) or 0)
             mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
 
-            # body_color = subtype_colors.get(subtype, table_text)
             body_color = self._get_body_subtype_color(subtype)
 
-            draw.text((45, row_y), display_body_name, fill=body_color, font=font_table_row)
+            draw.text(
+                (45, row_y),
+                display_body_name,
+                fill=body_color,
+                font=fonts["table_row"]
+            )
 
             dist_text = f"{self._format_int(distance_ls)} LS"
-            dist_width = self._get_text_width(draw, dist_text, font_table_row)
+            dist_width = self._get_text_width(draw, dist_text, fonts["table_row"])
 
             if value_mode == "scan":
                 scan_text = self._format_int(scan_value)
-                scan_width = self._get_text_width(draw, scan_text, font_table_row)
+                scan_width = self._get_text_width(draw, scan_text, fonts["table_row"])
 
-                draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
-                draw.text((910 - scan_width, row_y), scan_text, fill=ed_orange, font=font_table_row)
+                draw.text(
+                    (560 - dist_width, row_y),
+                    dist_text,
+                    fill=colors["table_text"],
+                    font=fonts["table_row"]
+                )
+                draw.text(
+                    (910 - scan_width, row_y),
+                    scan_text,
+                    fill=colors["ed_orange"],
+                    font=fonts["table_row"]
+                )
 
             elif value_mode == "mapping":
                 map_text = self._format_int(mapping_value)
-                map_width = self._get_text_width(draw, map_text, font_table_row)
+                map_width = self._get_text_width(draw, map_text, fonts["table_row"])
 
-                draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
-                draw.text((910 - map_width, row_y), map_text, fill=ed_orange, font=font_table_row)
+                draw.text(
+                    (560 - dist_width, row_y),
+                    dist_text,
+                    fill=colors["table_text"],
+                    font=fonts["table_row"]
+                )
+                draw.text(
+                    (910 - map_width, row_y),
+                    map_text,
+                    fill=colors["ed_orange"],
+                    font=fonts["table_row"]
+                )
 
             else:
                 scan_text = self._format_int(scan_value)
                 map_text = self._format_int(mapping_value)
-                scan_width = self._get_text_width(draw, scan_text, font_table_row)
-                map_width = self._get_text_width(draw, map_text, font_table_row)
+                scan_width = self._get_text_width(draw, scan_text, fonts["table_row"])
+                map_width = self._get_text_width(draw, map_text, fonts["table_row"])
 
-                draw.text((520 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
-                draw.text((735 - scan_width, row_y), scan_text, fill=table_text, font=font_table_row)
-                draw.text((940 - map_width, row_y), map_text, fill=ed_orange, font=font_table_row)
+                draw.text(
+                    (520 - dist_width, row_y),
+                    dist_text,
+                    fill=colors["table_text"],
+                    font=fonts["table_row"]
+                )
+                draw.text(
+                    (735 - scan_width, row_y),
+                    scan_text,
+                    fill=colors["table_text"],
+                    font=fonts["table_row"]
+                )
+                draw.text(
+                    (940 - map_width, row_y),
+                    map_text,
+                    fill=colors["ed_orange"],
+                    font=fonts["table_row"]
+                )
 
         body_count = int(totals.get("count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
         mapping_total = int(totals.get("mapping_total", 0) or 0)
 
-        draw.text((60, summary_y_label), "BODIES", fill=ed_orange_dim, font=font_tiny)
-        draw.text((60, summary_y_value), f"{body_count}", fill=ed_orange, font=font_big)
-
         if value_mode == "scan":
-            draw.text((360, summary_y_label), "SCAN TOTAL", fill=ed_orange_dim, font=font_tiny)
-            draw.text(
-                (360, summary_y_value),
-                self._format_int(scan_total),
-                fill=ed_orange,
-                font=font_big
-            )
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 360,
+                    "label": "SCAN TOTAL",
+                    "value": self._format_int(scan_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = []
 
         elif value_mode == "mapping":
-            draw.text((360, summary_y_label), "MAP TOTAL", fill=ed_orange_dim, font=font_tiny)
-            draw.text(
-                (360, summary_y_value),
-                self._format_int(mapping_total),
-                fill=ed_orange,
-                font=font_big
-            )
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 360,
+                    "label": "MAP TOTAL",
+                    "value": self._format_int(mapping_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = []
 
         else:
-            draw.text((300, summary_y_label), "SCAN TOTAL", fill=ed_orange_dim, font=font_tiny)
-            draw.text(
-                (300, summary_y_value),
-                self._format_int(scan_total),
-                fill=table_text,
-                font=font_big
-            )
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 300,
+                    "label": "SCAN TOTAL",
+                    "value": self._format_int(scan_total),
+                    "color": colors["table_text"],
+                },
+                {
+                    "x": 650,
+                    "label": "MAP TOTAL",
+                    "value": self._format_int(mapping_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = [250, 610]
 
-            draw.text((650, summary_y_label), "MAP TOTAL", fill=ed_orange_dim, font=font_tiny)
-            draw.text(
-                (650, summary_y_value),
-                self._format_int(mapping_total),
-                fill=ed_orange,
-                font=font_big
-            )
+        body_count = int(totals.get("count", 0) or 0)
+        scan_total = int(totals.get("scan_total", 0) or 0)
+        mapping_total = int(totals.get("mapping_total", 0) or 0)
 
-            draw.line([(250, summary_vline_top), (250, summary_vline_bottom)], fill=line_dim, width=1)
-            draw.line([(610, summary_vline_top), (610, summary_vline_bottom)], fill=line_dim, width=1)
+        if value_mode == "scan":
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 360,
+                    "label": "SCAN TOTAL",
+                    "value": self._format_int(scan_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = []
 
-        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
-        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
-        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
-        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, bottom_corner_top), (22, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(22, bottom_corner_bottom), (52, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(948, bottom_corner_bottom), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(978, bottom_corner_top), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
+        elif value_mode == "mapping":
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 360,
+                    "label": "MAP TOTAL",
+                    "value": self._format_int(mapping_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = []
 
-        output_dir = os.path.dirname(self.kneeboard_output_img_file)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-        img.save(self.kneeboard_output_img_file)
+        else:
+            summary_items = [
+                {
+                    "x": 60,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": 300,
+                    "label": "SCAN TOTAL",
+                    "value": self._format_int(scan_total),
+                    "color": colors["table_text"],
+                },
+                {
+                    "x": 650,
+                    "label": "MAP TOTAL",
+                    "value": self._format_int(mapping_total),
+                    "color": colors["ed_orange"],
+                },
+            ]
+            separators = [250, 610]
+
+        self._draw_summary_blocks(
+            draw=draw,
+            items=summary_items,
+            layout=layout,
+            colors=colors,
+            fonts=fonts,
+            separators=separators,
+        )
+
+        self._save_kneeboard_image(img)
 
     def gen_exobiology_image(
         self,
@@ -3038,110 +3310,32 @@ class EdSpanshApp:
         totals,
         next_waypoint_jumps=0,
     ):
-        base_img_width = 1000
-        base_img_height = 620
-        row_height = 52
-        base_rows = 6
-
-        body_count_for_layout = max(len(bodies), base_rows)
-        extra_rows = max(0, body_count_for_layout - base_rows)
-        height_extra = extra_rows * row_height
-
-        img_width = base_img_width
-        img_height = base_img_height + height_extra
-
-        bg_color = (6, 8, 12)
-        line_dim = (80, 40, 0)
-        ed_orange = (255, 115, 0)
-        ed_orange_soft = (220, 100, 0)
-        ed_orange_dim = (150, 70, 0)
-        ed_cyan = (89, 223, 227)
-        color_on = (40, 210, 110)
-        color_off = (231, 76, 60)
-        table_header = (255, 170, 68)
-        table_text = (240, 240, 245)
+        colors = self._get_nav_image_palette()
+        fonts = self._load_nav_image_fonts()
+        layout = self._get_tabular_nav_layout(len(bodies))
         font_name = "arial.ttf"
 
-        try:
-            font_big = ImageFont.truetype(font_name, 32)
-            font_medium = ImageFont.truetype(font_name, 20)
-            font_tiny = ImageFont.truetype(font_name, 12)
-            font_table_header = ImageFont.truetype(font_name, 19)
-            font_table_row = ImageFont.truetype(font_name, 24)
-        except IOError:
-            font_big = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
-            font_tiny = ImageFont.load_default()
-            font_table_header = ImageFont.load_default()
-            font_table_row = ImageFont.load_default()
-
-        img = Image.new("RGB", (img_width, img_height), color=bg_color)
+        img = Image.new(
+            "RGB",
+            (layout["img_width"], layout["img_height"]),
+            color=colors["bg_color"]
+        )
         draw = ImageDraw.Draw(img)
 
-        title_text = "EXOBIOLOGY"
-        title_font = self._fit_font(
-            draw, title_text, font_name,
-            start_size=18, min_size=12, max_width=420
+        next_waypoint_text = self._format_next_waypoint_text(
+            next_waypoint,
+            next_waypoint_jumps,
         )
 
-        current_system_text = str(current_system).upper()
-        current_system_font = self._fit_font(
-            draw, current_system_text, font_name,
-            start_size=16, min_size=10, max_width=380
-        )
-
-        if next_waypoint:
-            jump_label = "JUMP" if int(next_waypoint_jumps or 0) == 1 else "JUMPS"
-            next_waypoint_text = (
-                f"{str(next_waypoint).upper()} "
-                f"({int(next_waypoint_jumps or 0)} {jump_label})"
-            )
-        else:
-            next_waypoint_text = "-"
-
-        next_waypoint_font = self._fit_font(
-            draw, next_waypoint_text, font_name,
-            start_size=16, min_size=10, max_width=380
-        )
-
-        outer_bottom = 610 + height_extra
-        inner_bottom = 598 + height_extra
-        summary_line_y = 485 + height_extra
-        summary_y_label = 500 + height_extra
-        summary_y_value = 528 + height_extra
-        summary_vline_top = 496 + height_extra
-        summary_vline_bottom = 565 + height_extra
-        bottom_corner_top = 568 + height_extra
-        bottom_corner_bottom = 598 + height_extra
-
-        draw.rectangle([(10, 10), (990, outer_bottom)], outline=ed_orange, width=2)
-        draw.rectangle([(22, 22), (978, inner_bottom)], outline=ed_orange_dim, width=1)
-
-        draw.line([(35, 68), (965, 68)], fill=ed_orange_dim, width=1)
-        draw.line([(35, 108), (965, 108)], fill=line_dim, width=1)
-        draw.line([(35, summary_line_y), (965, summary_line_y)], fill=line_dim, width=1)
-
-        draw.text((40, 30), title_text, fill=ed_orange, font=title_font)
-
-        draw.text((42, 74), "CURRENT SYSTEM", fill=ed_orange_soft, font=font_tiny)
-        draw.text((42, 88), current_system_text, fill=ed_cyan, font=current_system_font)
-
-        draw.text((520, 74), "NEXT WAYPOINT", fill=ed_orange_soft, font=font_tiny)
-        draw.text((520, 88), next_waypoint_text, fill=ed_orange, font=next_waypoint_font)
-
-        route_status_text = "ON ROUTE" if current_system_on_route else "OFF ROUTE"
-        route_status_color = color_on if current_system_on_route else color_off
-        route_dot_y = 28
-
-        draw.ellipse(
-            [(810, route_dot_y), (836, route_dot_y + 26)],
-            fill=route_status_color
-        )
-        draw.text(
-            (850, route_dot_y + 2),
-            route_status_text,
-            fill=ed_orange,
-            font=font_medium
+        self._draw_tabular_nav_frame(draw, layout, colors)
+        self._draw_tabular_nav_header(
+            draw=draw,
+            title_text="EXOBIOLOGY",
+            current_system=current_system,
+            next_waypoint_text=next_waypoint_text,
+            current_system_on_route=current_system_on_route,
+            colors=colors,
+            fonts=fonts,
         )
 
         table_left = 45
@@ -3155,21 +3349,18 @@ class EdSpanshApp:
             ("LANDMARK SUBTYPE", 740, "left"),
         ]
 
-        for header, x, align in columns:
-            if align == "left":
-                draw.text((x, table_top), header, fill=table_header, font=font_table_header)
-            else:
-                text_width = self._get_text_width(draw, header, font_table_header)
-                draw.text((x - text_width, table_top), header, fill=table_header, font=font_table_header)
-
-        draw.line(
-            [(table_left, table_top + 30), (table_right, table_top + 30)],
-            fill=line_dim,
-            width=1
+        self._draw_table_headers(
+            draw=draw,
+            table_top=table_top,
+            table_left=table_left,
+            table_right=table_right,
+            columns=columns,
+            colors=colors,
+            fonts=fonts,
         )
 
         for i, body in enumerate(bodies):
-            row_y = table_top + 42 + (i * row_height)
+            row_y = table_top + 42 + (i * 52)
 
             body_name = str(body.get("name", "") or "")
             display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
@@ -3197,47 +3388,66 @@ class EdSpanshApp:
                 max_width=200,
             )
 
-            draw.text((45, row_y), display_body_name, fill=body_color, font=body_font)
+            draw.text(
+                (45, row_y),
+                display_body_name,
+                fill=body_color,
+                font=body_font
+            )
 
             dist_text = f"{self._format_int(distance_ls)} LS"
             value_text = self._format_int(landmark_value)
 
-            dist_width = self._get_text_width(draw, dist_text, font_table_row)
-            value_width = self._get_text_width(draw, value_text, font_table_row)
+            dist_width = self._get_text_width(draw, dist_text, fonts["table_row"])
+            value_width = self._get_text_width(draw, value_text, fonts["table_row"])
 
-            draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
-            draw.text((710 - value_width, row_y), value_text, fill=ed_orange, font=font_table_row)
-            draw.text((740, row_y + 4), landmark_subtype, fill=table_text, font=subtype_font)
+            draw.text(
+                (500 - dist_width, row_y),
+                dist_text,
+                fill=colors["table_text"],
+                font=fonts["table_row"]
+            )
+            draw.text(
+                (710 - value_width, row_y),
+                value_text,
+                fill=colors["ed_orange"],
+                font=fonts["table_row"]
+            )
+            draw.text(
+                (740, row_y + 4),
+                landmark_subtype,
+                fill=colors["table_text"],
+                font=subtype_font
+            )
 
         body_count = int(totals.get("count", 0) or 0)
         landmark_total = int(totals.get("landmark_total", 0) or 0)
 
-        draw.text((60, summary_y_label), "BODIES", fill=ed_orange_dim, font=font_tiny)
-        draw.text((60, summary_y_value), f"{body_count}", fill=ed_orange, font=font_big)
+        summary_items = [
+            {
+                "x": 60,
+                "label": "BODIES",
+                "value": f"{body_count}",
+                "color": colors["ed_orange"],
+            },
+            {
+                "x": 400,
+                "label": "LANDMARK TOTAL",
+                "value": self._format_int(landmark_total),
+                "color": colors["ed_orange"],
+            },
+        ]
 
-        draw.text((400, summary_y_label), "LANDMARK TOTAL", fill=ed_orange_dim, font=font_tiny)
-        draw.text(
-            (400, summary_y_value),
-            self._format_int(landmark_total),
-            fill=ed_orange,
-            font=font_big
+        self._draw_summary_blocks(
+            draw=draw,
+            items=summary_items,
+            layout=layout,
+            colors=colors,
+            fonts=fonts,
+            separators=[320],
         )
 
-        draw.line([(320, summary_vline_top), (320, summary_vline_bottom)], fill=line_dim, width=1)
-
-        draw.line([(22, 22), (52, 22)], fill=ed_orange, width=2)
-        draw.line([(22, 22), (22, 52)], fill=ed_orange, width=2)
-        draw.line([(948, 22), (978, 22)], fill=ed_orange, width=2)
-        draw.line([(978, 22), (978, 52)], fill=ed_orange, width=2)
-        draw.line([(22, bottom_corner_top), (22, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(22, bottom_corner_bottom), (52, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(948, bottom_corner_bottom), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
-        draw.line([(978, bottom_corner_top), (978, bottom_corner_bottom)], fill=ed_orange, width=2)
-
-        output_dir = os.path.dirname(self.kneeboard_output_img_file)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-        img.save(self.kneeboard_output_img_file)
+        self._save_kneeboard_image(img)
 
     def gen_destination_reached_image(
         self,
@@ -3488,8 +3698,8 @@ class EdSpanshApp:
         )
 
         self.log(
-            f"Next: {next_stop} | Scoopable: {scoopable} | "
-            f"Neutron: {has_neutron} | Distance: {jump_dist} LY"
+            f"Next: {next_stop} | Jumps to reach: {next_waypoint_jumps} | "
+            f"Scoopable: {scoopable} | Neutron: {has_neutron} | Distance: {jump_dist} LY"
         )
         self.log(
             f"Progress: {jumps_remain} jumps remaining until "
@@ -3508,9 +3718,9 @@ class EdSpanshApp:
                     current_system=system_name,
                     current_system_on_route=on_route,
                     next_waypoint=next_stop,
-                    next_waypoint_jumps=next_waypoint_jumps,
                     bodies=exo_bodies,
                     totals=exo_totals,
+                    next_waypoint_jumps=next_waypoint_jumps,
                 )
 
             elif self.route_type.startswith("Road to Riches"):
@@ -3521,11 +3731,12 @@ class EdSpanshApp:
                     current_system=system_name,
                     current_system_on_route=on_route,
                     next_waypoint=next_stop,
-                    next_waypoint_jumps=next_waypoint_jumps,
                     bodies=r2r_bodies,
                     totals=r2r_totals,
                     value_mode=self.r2r_value_mode,
+                    next_waypoint_jumps=next_waypoint_jumps,
                 )
+
             else:
                 self.gen_galaxy_plotter_image(
                     current_system=system_name,
