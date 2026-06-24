@@ -3125,9 +3125,9 @@ class EdSpanshApp:
 
         columns = [
             ("BODY", 45, "left"),
-            ("DIST", 560, "right"),
-            ("LANDMARK", 740, "right"),
-            ("SUBTYPE", 765, "left"),
+            ("DIST", 500, "right"),
+            ("LANDMARK VALUE", 710, "right"),
+            ("LANDMARK SUBTYPE", 740, "left"),
         ]
 
         for header, x, align in columns:
@@ -3161,7 +3161,7 @@ class EdSpanshApp:
                 font_name,
                 start_size=24,
                 min_size=12,
-                max_width=430,
+                max_width=360,
             )
             subtype_font = self._fit_font(
                 draw,
@@ -3169,7 +3169,7 @@ class EdSpanshApp:
                 font_name,
                 start_size=18,
                 min_size=10,
-                max_width=180,
+                max_width=200,
             )
 
             draw.text((45, row_y), display_body_name, fill=body_color, font=body_font)
@@ -3180,9 +3180,9 @@ class EdSpanshApp:
             dist_width = self._get_text_width(draw, dist_text, font_table_row)
             value_width = self._get_text_width(draw, value_text, font_table_row)
 
-            draw.text((560 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
-            draw.text((740 - value_width, row_y), value_text, fill=ed_orange, font=font_table_row)
-            draw.text((765, row_y + 4), landmark_subtype, fill=table_text, font=subtype_font)
+            draw.text((500 - dist_width, row_y), dist_text, fill=table_text, font=font_table_row)
+            draw.text((710 - value_width, row_y), value_text, fill=ed_orange, font=font_table_row)
+            draw.text((740, row_y + 4), landmark_subtype, fill=table_text, font=subtype_font)
 
         body_count = int(totals.get("count", 0) or 0)
         landmark_total = int(totals.get("landmark_total", 0) or 0)
