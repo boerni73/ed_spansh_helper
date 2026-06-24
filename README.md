@@ -68,6 +68,9 @@ This project was built with a lot of help from Large Language Models (LLMs). Whi
 #### Road to Riches
 ![Generated Navigation Image](docs/images/r2r_image.png)
 
+#### Expressway to Exomastery
+![Generated Navigation Image](docs/images/exo_image.png)
+
 ---
 
 ## Prerequisites & Downloads
