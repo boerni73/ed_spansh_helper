@@ -1439,6 +1439,12 @@ class EdSpanshApp:
 
         return route_rows
 
+    def get_waypoint_jumps(self, system_name):
+        route_entry = self.get_route_entry_by_name(system_name)
+        if not route_entry:
+            return 0
+        return int(route_entry.get("jumps", 0) or 0)
+
     def detect_systems_route_type(self, raw_systems):
         for system in raw_systems:
             if not isinstance(system, dict):
@@ -1545,6 +1551,7 @@ class EdSpanshApp:
                     "x": float(item.get("x", 0.0) or 0.0),
                     "y": float(item.get("y", 0.0) or 0.0),
                     "z": float(item.get("z", 0.0) or 0.0),
+                    "jumps": int(item.get("jumps", 0) or 0),
                     "bodies": item.get("bodies", []),
                 })
 
@@ -2776,6 +2783,7 @@ class EdSpanshApp:
         bodies,
         totals,
         value_mode="both",
+        next_waypoint_jumps=0,
     ):
         base_img_width = 1000
         base_img_height = 620
@@ -2829,7 +2837,15 @@ class EdSpanshApp:
             start_size=16, min_size=10, max_width=380
         )
 
-        next_waypoint_text = str(next_waypoint).upper() if next_waypoint else "-"
+        if next_waypoint:
+            jump_label = "JUMP" if int(next_waypoint_jumps or 0) == 1 else "JUMPS"
+            next_waypoint_text = (
+                f"{str(next_waypoint).upper()} "
+                f"({int(next_waypoint_jumps or 0)} {jump_label})"
+            )
+        else:
+            next_waypoint_text = "-"
+
         next_waypoint_font = self._fit_font(
             draw, next_waypoint_text, font_name,
             start_size=16, min_size=10, max_width=380
@@ -3020,6 +3036,7 @@ class EdSpanshApp:
         next_waypoint,
         bodies,
         totals,
+        next_waypoint_jumps=0,
     ):
         base_img_width = 1000
         base_img_height = 620
@@ -3073,7 +3090,15 @@ class EdSpanshApp:
             start_size=16, min_size=10, max_width=380
         )
 
-        next_waypoint_text = str(next_waypoint).upper() if next_waypoint else "-"
+        if next_waypoint:
+            jump_label = "JUMP" if int(next_waypoint_jumps or 0) == 1 else "JUMPS"
+            next_waypoint_text = (
+                f"{str(next_waypoint).upper()} "
+                f"({int(next_waypoint_jumps or 0)} {jump_label})"
+            )
+        else:
+            next_waypoint_text = "-"
+
         next_waypoint_font = self._fit_font(
             draw, next_waypoint_text, font_name,
             start_size=16, min_size=10, max_width=380
@@ -3451,6 +3476,8 @@ class EdSpanshApp:
             on_route,
         ) = result
 
+        next_waypoint_jumps = self.get_waypoint_jumps(next_stop)
+
         self.highlight_route_table(system_name, next_stop)
         self.update_dashboard(
             next_sys=next_stop,
@@ -3481,6 +3508,7 @@ class EdSpanshApp:
                     current_system=system_name,
                     current_system_on_route=on_route,
                     next_waypoint=next_stop,
+                    next_waypoint_jumps=next_waypoint_jumps,
                     bodies=exo_bodies,
                     totals=exo_totals,
                 )
@@ -3493,6 +3521,7 @@ class EdSpanshApp:
                     current_system=system_name,
                     current_system_on_route=on_route,
                     next_waypoint=next_stop,
+                    next_waypoint_jumps=next_waypoint_jumps,
                     bodies=r2r_bodies,
                     totals=r2r_totals,
                     value_mode=self.r2r_value_mode,
