@@ -19,6 +19,7 @@ import math
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, ttk
+from typing import Any, cast
 
 import tkinterdnd2
 from tkinterdnd2 import DND_FILES
@@ -96,35 +97,54 @@ THEMES = {
 
 
 class EdSpanshApp:
+    # ------------------------------------------------------------------
+    # Navigation image layout constants
+    # Shared layout settings for Road to Riches / Exobiology kneeboard PNGs
+    # ------------------------------------------------------------------
     NAV_FONT_NAME = "arial.ttf"
 
+    # Shared table layout
     TABLE_LEFT = 45
     TABLE_RIGHT = 955
     TABLE_TOP = 118
     TABLE_FIRST_ROW_Y_OFFSET = 42
     TABLE_ROW_HEIGHT = 52
 
-    R2R_COL_BODY_X = 45
+    # Shared summary layout
+    SUMMARY_BODIES_X = 60
 
+    # Road to Riches table columns
+    R2R_COL_BODY_X = 45
     R2R_SINGLE_COL_DIST_X = 560
     R2R_SINGLE_COL_VALUE_X = 910
-
     R2R_BOTH_COL_DIST_X = 520
     R2R_BOTH_COL_SCAN_X = 735
     R2R_BOTH_COL_MAP_X = 940
 
+    # Road to Riches summary layout
+    R2R_SUMMARY_SINGLE_VALUE_X = 360
+    R2R_SUMMARY_SCAN_X = 300
+    R2R_SUMMARY_MAP_X = 650
+    R2R_SUMMARY_SEP_LEFT_X = 250
+    R2R_SUMMARY_SEP_RIGHT_X = 610
+
+    # Exobiology table columns
     EXO_COL_BODY_X = 45
     EXO_COL_DIST_X = 500
     EXO_COL_VALUE_X = 710
     EXO_COL_SUBTYPE_X = 740
 
+    # Exobiology text fitting
     EXO_BODY_FONT_START = 24
     EXO_BODY_FONT_MIN = 12
     EXO_BODY_MAX_WIDTH = 360
-
     EXO_SUBTYPE_FONT_START = 18
     EXO_SUBTYPE_FONT_MIN = 10
     EXO_SUBTYPE_MAX_WIDTH = 200
+
+    # Exobiology summary layout
+    EXO_SUMMARY_VALUE_X = 400
+    EXO_SUMMARY_SEPARATOR_X = 320
 
     # ------------------------------------------------------------------
     # Application lifecycle
@@ -1041,9 +1061,10 @@ class EdSpanshApp:
         self.dash_frame.config(
             bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
         )
+
         for child in self.dash_frame.winfo_children():
             try:
-                child.config(bg=t["panel_bg"], fg=t["fg"])
+                cast(Any, child).configure(bg=t["panel_bg"], fg=t["fg"])
             except Exception:
                 pass
         self.dashboard_image_label.config(bg=t["panel_bg"], fg=t["accent_fg"])
@@ -1162,10 +1183,10 @@ class EdSpanshApp:
     # Drag and drop
     # ------------------------------------------------------------------
     def setup_drag_and_drop(self):
-        self.file_entry.drop_target_register(DND_FILES)
-        self.file_entry.dnd_bind("<<Drop>>", self.handle_drop)
-        self.log_output.drop_target_register(DND_FILES)
-        self.log_output.dnd_bind("<<Drop>>", self.handle_drop)
+        cast(Any, self.file_entry).drop_target_register(DND_FILES)
+        cast(Any, self.file_entry).dnd_bind("<<Drop>>", self.handle_drop)
+        cast(Any, self.log_output).drop_target_register(DND_FILES)
+        cast(Any, self.log_output).dnd_bind("<<Drop>>", self.handle_drop)
 
     def handle_drop(self, event):
         file_path = event.data
@@ -1359,15 +1380,15 @@ class EdSpanshApp:
         previous_selection = self.ship_build_var.get().strip()
 
         self.rebuild_ship_build_index()
-        names = [entry["name"] for entry in self.ship_builds]
-        self.ship_build_dropdown["values"] = names
+        names = [str(entry["name"]) for entry in self.ship_builds]
+        self.ship_build_dropdown.configure(values=tuple(names))
 
         if names:
             if previous_selection in names:
-                self.ship_build_var.set(previous_selection)
+                self.ship_build_var.set(str(previous_selection or ""))
                 self.ship_build_dropdown.current(names.index(previous_selection))
             else:
-                self.ship_build_var.set(names[0])
+                self.ship_build_var.set(str(names[0] or ""))
                 self.ship_build_dropdown.current(0)
         else:
             self.ship_build_var.set("")
@@ -1921,8 +1942,8 @@ class EdSpanshApp:
             status_label.config(fg=self.vr_mode_color(mode))
 
         def refresh_vr_dropdown(select_name=None):
-            names = [item.get("name", "Unnamed Version") for item in vr_versions_tmp]
-            vr_dropdown["values"] = names
+            names = [str(item.get("name") or "Unnamed Version") for item in vr_versions_tmp]
+            vr_dropdown.configure(values=tuple(names))
 
             if not names:
                 selected_vr_var.set("")
@@ -1934,12 +1955,12 @@ class EdSpanshApp:
                 ignore_name_focus["value"] = False
                 ignore_path_focus["value"] = False
                 status_var.set("No stored game version")
-                status_label.config(fg="#808080")
+                status_label.configure(fg="#808080")
                 set_vr_controls_enabled(False)
                 return
 
             target_name = select_name if select_name in names else names[0]
-            selected_vr_var.set(target_name)
+            selected_vr_var.set(str(target_name or ""))
             vr_dropdown.current(names.index(target_name))
             load_selected_version()
 
@@ -1956,20 +1977,20 @@ class EdSpanshApp:
                 ignore_name_focus["value"] = False
                 ignore_path_focus["value"] = False
                 status_var.set("No game version selected")
-                status_label.config(fg="#808080")
+                status_label.configure(fg="#808080")
                 set_vr_controls_enabled(False)
                 return
 
-            current_loaded_name["value"] = entry["name"]
+            current_loaded_name["value"] = str(entry.get("name") or "")
 
             ignore_name_focus["value"] = True
             ignore_path_focus["value"] = True
-            version_name_var.set(entry.get("name", ""))
-            version_path_var.set(entry.get("path", ""))
+            version_name_var.set(str(entry.get("name") or ""))
+            version_path_var.set(str(entry.get("path") or ""))
             ignore_name_focus["value"] = False
             ignore_path_focus["value"] = False
 
-            update_status(entry.get("path", ""))
+            update_status(str(entry.get("path") or ""))
             set_vr_controls_enabled(True)
 
         def apply_name_field(event=None):
@@ -2892,27 +2913,6 @@ class EdSpanshApp:
     def _get_table_row_y(self, table_top, row_index):
         return table_top + self.TABLE_FIRST_ROW_Y_OFFSET + (row_index * self.TABLE_ROW_HEIGHT)
 
-    def _get_r2r_columns(self, value_mode):
-        if value_mode == "scan":
-            return [
-                ("BODY", 45, "left"),
-                ("DIST", 560, "right"),
-                ("SCAN", 910, "right"),
-            ]
-        elif value_mode == "mapping":
-            return [
-                ("BODY", 45, "left"),
-                ("DIST", 560, "right"),
-                ("MAP", 910, "right"),
-            ]
-        else:
-            return [
-                ("BODY", 45, "left"),
-                ("DIST", 520, "right"),
-                ("SCAN", 735, "right"),
-                ("MAP", 940, "right"),
-            ]
-
     def _get_exobiology_columns(self):
         return [
             ("BODY", self.EXO_COL_BODY_X, "left"),
@@ -2964,6 +2964,88 @@ class EdSpanshApp:
                 "scan_x": self.R2R_BOTH_COL_SCAN_X,
                 "map_x": self.R2R_BOTH_COL_MAP_X,
             }
+
+    def _get_r2r_summary_config(self, value_mode, body_count, scan_total, mapping_total, colors):
+        if value_mode == "scan":
+            return {
+                "items": [
+                    {
+                        "x": self.SUMMARY_BODIES_X,
+                        "label": "BODIES",
+                        "value": f"{body_count}",
+                        "color": colors["ed_orange"],
+                    },
+                    {
+                        "x": self.R2R_SUMMARY_SINGLE_VALUE_X,
+                        "label": "SCAN TOTAL",
+                        "value": self._format_int(scan_total),
+                        "color": colors["ed_orange"],
+                    },
+                ],
+                "separators": [],
+            }
+
+        if value_mode == "mapping":
+            return {
+                "items": [
+                    {
+                        "x": self.SUMMARY_BODIES_X,
+                        "label": "BODIES",
+                        "value": f"{body_count}",
+                        "color": colors["ed_orange"],
+                    },
+                    {
+                        "x": self.R2R_SUMMARY_SINGLE_VALUE_X,
+                        "label": "MAP TOTAL",
+                        "value": self._format_int(mapping_total),
+                        "color": colors["ed_orange"],
+                    },
+                ],
+                "separators": [],
+            }
+
+        return {
+            "items": [
+                {
+                    "x": self.SUMMARY_BODIES_X,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": self.R2R_SUMMARY_SCAN_X,
+                    "label": "SCAN TOTAL",
+                    "value": self._format_int(scan_total),
+                    "color": colors["table_text"],
+                },
+                {
+                    "x": self.R2R_SUMMARY_MAP_X,
+                    "label": "MAP TOTAL",
+                    "value": self._format_int(mapping_total),
+                    "color": colors["ed_orange"],
+                },
+            ],
+            "separators": [self.R2R_SUMMARY_SEP_LEFT_X, self.R2R_SUMMARY_SEP_RIGHT_X],
+        }
+
+    def _get_exobiology_summary_config(self, body_count, landmark_total, colors):
+        return {
+            "items": [
+                {
+                    "x": self.SUMMARY_BODIES_X,
+                    "label": "BODIES",
+                    "value": f"{body_count}",
+                    "color": colors["ed_orange"],
+                },
+                {
+                    "x": self.EXO_SUMMARY_VALUE_X,
+                    "label": "LANDMARK TOTAL",
+                    "value": self._format_int(landmark_total),
+                    "color": colors["ed_orange"],
+                },
+            ],
+            "separators": [self.EXO_SUMMARY_SEPARATOR_X],
+        }
 
     def _save_kneeboard_image(self, img):
         output_dir = os.path.dirname(self.kneeboard_output_img_file)
@@ -3265,70 +3347,21 @@ class EdSpanshApp:
         scan_total = int(totals.get("scan_total", 0) or 0)
         mapping_total = int(totals.get("mapping_total", 0) or 0)
 
-        if value_mode == "scan":
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 360,
-                    "label": "SCAN TOTAL",
-                    "value": self._format_int(scan_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = []
-
-        elif value_mode == "mapping":
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 360,
-                    "label": "MAP TOTAL",
-                    "value": self._format_int(mapping_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = []
-
-        else:
-            summary_items = [
-                {
-                    "x": 60,
-                    "label": "BODIES",
-                    "value": f"{body_count}",
-                    "color": colors["ed_orange"],
-                },
-                {
-                    "x": 300,
-                    "label": "SCAN TOTAL",
-                    "value": self._format_int(scan_total),
-                    "color": colors["table_text"],
-                },
-                {
-                    "x": 650,
-                    "label": "MAP TOTAL",
-                    "value": self._format_int(mapping_total),
-                    "color": colors["ed_orange"],
-                },
-            ]
-            separators = [250, 610]
+        summary_config = self._get_r2r_summary_config(
+            value_mode=value_mode,
+            body_count=body_count,
+            scan_total=scan_total,
+            mapping_total=mapping_total,
+            colors=colors,
+        )
 
         self._draw_summary_blocks(
             draw=draw,
-            items=summary_items,
+            items=summary_config["items"],
             layout=layout,
             colors=colors,
             fonts=fonts,
-            separators=separators,
+            separators=summary_config["separators"],
         )
 
         self._save_kneeboard_image(img)
@@ -3449,28 +3482,19 @@ class EdSpanshApp:
         body_count = int(totals.get("count", 0) or 0)
         landmark_total = int(totals.get("landmark_total", 0) or 0)
 
-        summary_items = [
-            {
-                "x": 60,
-                "label": "BODIES",
-                "value": f"{body_count}",
-                "color": colors["ed_orange"],
-            },
-            {
-                "x": 400,
-                "label": "LANDMARK TOTAL",
-                "value": self._format_int(landmark_total),
-                "color": colors["ed_orange"],
-            },
-        ]
+        summary_config = self._get_exobiology_summary_config(
+            body_count=body_count,
+            landmark_total=landmark_total,
+            colors=colors,
+        )
 
         self._draw_summary_blocks(
             draw=draw,
-            items=summary_items,
+            items=summary_config["items"],
             layout=layout,
             colors=colors,
             fonts=fonts,
-            separators=[320],
+            separators=summary_config["separators"],
         )
 
         self._save_kneeboard_image(img)
