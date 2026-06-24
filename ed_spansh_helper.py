@@ -2595,6 +2595,23 @@ class EdSpanshApp:
         except Exception:
             return "0"
 
+    def _get_body_subtype_color(self, subtype):
+        table_text = (240, 240, 245)
+        rocky_grey = (185, 185, 185)
+        water_blue = (80, 190, 255)
+        earthlike_cyan = (80, 255, 220)
+        ammonia_lime = (185, 220, 90)
+        hmc_orange = (255, 185, 90)
+
+        subtype_colors = {
+            "Earth-like world": earthlike_cyan,
+            "Water world": water_blue,
+            "Ammonia world": ammonia_lime,
+            "High metal content world": hmc_orange,
+            "Rocky body": rocky_grey,
+        }
+        return subtype_colors.get(str(subtype or ""), table_text)
+
     def gen_galaxy_plotter_image(
         self,
         current_system,
@@ -2782,20 +2799,7 @@ class EdSpanshApp:
         color_off = (231, 76, 60)
         table_header = (255, 170, 68)
         table_text = (240, 240, 245)
-        rocky_grey = (185, 185, 185)
-        water_blue = (80, 190, 255)
-        earthlike_cyan = (80, 255, 220)
-        ammonia_lime = (185, 220, 90)
-        hmc_orange = (255, 185, 90)
         font_name = "arial.ttf"
-
-        subtype_colors = {
-            "Earth-like world": earthlike_cyan,
-            "Water world": water_blue,
-            "Ammonia world": ammonia_lime,
-            "High metal content world": hmc_orange,
-            "Rocky body": rocky_grey,
-        }
 
         try:
             font_big = ImageFont.truetype(font_name, 32)
@@ -2918,7 +2922,8 @@ class EdSpanshApp:
             scan_value = int(body.get("estimated_scan_value", 0) or 0)
             mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
 
-            body_color = subtype_colors.get(subtype, table_text)
+            # body_color = subtype_colors.get(subtype, table_text)
+            body_color = self._get_body_subtype_color(subtype)
 
             draw.text((45, row_y), display_body_name, fill=body_color, font=font_table_row)
 
