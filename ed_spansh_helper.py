@@ -1836,14 +1836,15 @@ class EdSpanshApp:
             row=2, column=0, columnspan=4, sticky="ew", padx=12, pady=(4, 8)
         )
 
-        vr_versions_tmp = [dict(item) for item in self.vr_versions]
+        vr_versions_tmp: list[dict[str, str]] = [dict(item) for item in self.vr_versions]
         selected_vr_var = tk.StringVar()
         version_name_var = tk.StringVar()
         version_path_var = tk.StringVar()
         status_var = tk.StringVar(value="No stored game version")
-        current_loaded_name = {"value": None}
-        ignore_name_focus = {"value": False}
-        ignore_path_focus = {"value": False}
+
+        current_loaded_name: dict[str, str | None] = {"value": None}
+        ignore_name_focus: dict[str, bool] = {"value": False}
+        ignore_path_focus: dict[str, bool] = {"value": False}
 
         tk.Label(
             tab_vr,
