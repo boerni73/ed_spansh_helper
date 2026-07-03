@@ -20,7 +20,10 @@ This tool reads **Spansh route JSON files**, monitors your **Elite Dangerous jou
   - [Features](#features)
   - [Screenshots](#screenshots)
     - [Main Window](#main-window)
-    - [Generated Navigation Image](#generated-navigation-image)
+    - [Generated Navigation Images](#generated-navigation-images)
+      - [Galaxy-/Neutron Plotter](#galaxy-neutron-plotter)
+      - [Road to Riches](#road-to-riches)
+      - [Expressway to Exomastery](#expressway-to-exomastery)
   - [Prerequisites \& Downloads](#prerequisites--downloads)
   - [Installation](#installation)
     - [Option 1: Run the Executable (Recommended for users)](#option-1-run-the-executable-recommended-for-users)
@@ -77,7 +80,7 @@ This project was built with a lot of help from Large Language Models (LLMs). Whi
 
 You will need to download and install the following tools:
 
-1. **OpenXR DLL (64-bit):** [Download OpenComposite DLL](https://znix.xyz) (Replaces SteamVR for better performance).
+1. **OpenXR DLL (64-bit):** [Download OpenComposite DLL](https://znix.xyz/OpenComposite/download.php?arch=x64&branch=openxr) (Replaces SteamVR for better performance).
 2. **OpenKneeboard:** [Official Website](https://openkneeboard.com) (To view the nav image in VR).
 3. **VoiceAttack:** [Official Website](https://voiceattack.com) (Recommended for automated clipboard pasting).
 
