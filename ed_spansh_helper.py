@@ -98,6 +98,8 @@ THEMES = {
 
 
 class EdSpanshApp:
+    OFF_ROUTE_ORDER_PRIORITY_THRESHOLD_LY = 80.0
+
     # ------------------------------------------------------------------
     # Navigation image layout constants
     # Shared layout settings for Road to Riches / Exobiology kneeboard PNGs
@@ -2629,6 +2631,22 @@ class EdSpanshApp:
 
         return None
 
+    def get_route_entry_by_index(self, index):
+        try:
+            index = int(index)
+        except Exception:
+            return None
+
+        if 0 <= index < len(self.my_route):
+            return self.my_route[index]
+        return None
+
+    def get_next_waypoint_jumps(self):
+        next_entry = self.get_route_entry_by_index(self.route_index)
+        if not next_entry:
+            return 0
+        return int(next_entry.get("jumps", 0) or 0)
+
     def get_r2r_display_bodies(self, system_name, max_rows=None):
         route_entry = self.get_route_entry_by_name(system_name)
         if not route_entry:
@@ -2782,41 +2800,106 @@ class EdSpanshApp:
         if not self.my_route:
             return None
 
+        system_name_lc = str(system_name).strip().lower()
         current_index = -1
         on_route = False
 
-        for i, jump in enumerate(self.my_route):
-            if jump["name"].lower() == system_name.lower():
+        # Important for round trips:
+        # start searching from the current route progress so duplicate system
+        # names do not always resolve to the first occurrence in the route.
+        search_start = min(max(int(self.route_index), 0), len(self.my_route) - 1)
+
+        for i in range(search_start, len(self.my_route)):
+            jump_name = str(self.my_route[i].get("name", "")).strip().lower()
+            if jump_name == system_name_lc:
                 current_index = i
                 on_route = True
                 break
 
+        # Fallback: if nothing was found from the current progress onward,
+        # search the entire route once.
         if current_index == -1:
-            self.log("Current system is not in the route. Searching for the closest route system...")
-            min_distance = float("inf")
-            closest_index = -1
-
             for i, jump in enumerate(self.my_route):
+                jump_name = str(jump.get("name", "")).strip().lower()
+                if jump_name == system_name_lc:
+                    current_index = i
+                    on_route = True
+                    break
+
+        if current_index == -1:
+            self.log(
+                "Current system is not in the route. "
+                "Searching for the best matching route system..."
+            )
+
+            near_threshold_ly = self.OFF_ROUTE_ORDER_PRIORITY_THRESHOLD_LY
+            closest_index = -1
+            min_distance = float("inf")
+
+            # First priority:
+            # walk through the remaining route in order and select the earliest
+            # waypoint that is within the configured threshold distance.
+            for i in range(search_start, len(self.my_route)):
+                jump = self.my_route[i]
                 dist = self.distance(
-                    (jump["x"], jump["y"], jump["z"]),
+                    (jump.get("x", 0.0), jump.get("y", 0.0), jump.get("z", 0.0)),
                     current_coordinates
                 )
+
                 if dist < min_distance:
                     min_distance = dist
                     closest_index = i
 
-            current_index = closest_index
-            if current_index != -1:
+                if dist < near_threshold_ly:
+                    current_index = i
+                    self.log(
+                        f"Selected route system by route order: "
+                        f"{self.my_route[current_index]['name']} "
+                        f"({dist} LY, within {near_threshold_ly:.0f} LY threshold)"
+                    )
+                    break
+
+            # If no upcoming waypoint is within the threshold,
+            # fall back to the closest waypoint in the remaining route.
+            if current_index == -1 and closest_index != -1:
+                current_index = closest_index
                 self.log(
-                    f"Closest route system: "
+                    f"No route-ordered waypoint within {near_threshold_ly:.0f} LY. "
+                    f"Using closest remaining route system: "
                     f"{self.my_route[current_index]['name']} ({min_distance} LY)"
                 )
-                if current_index > 0:
-                    current_index -= 1
+
+            # Final fallback:
+            # if nothing usable was found in the remaining route, search the full route.
+            if current_index == -1:
+                closest_index = -1
+                min_distance = float("inf")
+
+                for i, jump in enumerate(self.my_route):
+                    dist = self.distance(
+                        (jump.get("x", 0.0), jump.get("y", 0.0), jump.get("z", 0.0)),
+                        current_coordinates
+                    )
+                    if dist < min_distance:
+                        min_distance = dist
+                        closest_index = i
+
+                current_index = closest_index
+                if current_index != -1:
+                    self.log(
+                        f"Fallback to closest route system in full route: "
+                        f"{self.my_route[current_index]['name']} ({min_distance} LY)"
+                    )
+
+            # Step one entry back so the next waypoint still points forward
+            # from the matched route position.
+            if current_index > 0:
+                current_index -= 1
 
         if current_index == -1:
             return None
 
+        # Advance route progress to the next route entry after the current system.
         self.route_index = current_index + 1
 
         if self.route_index >= len(self.my_route):
@@ -2831,9 +2914,9 @@ class EdSpanshApp:
             next_system.get("z", 0.0),
         )
         final_destination_coord = (
-            remaining_route[-1]["x"],
-            remaining_route[-1]["y"],
-            remaining_route[-1]["z"],
+            remaining_route[-1].get("x", 0.0),
+            remaining_route[-1].get("y", 0.0),
+            remaining_route[-1].get("z", 0.0),
         )
 
         return (
@@ -3962,11 +4045,13 @@ class EdSpanshApp:
             on_route,
         ) = result
 
-        next_waypoint_jumps = self.get_waypoint_jumps(next_stop)
+        next_waypoint_jumps = self.get_next_waypoint_jumps()
 
         self.last_next_waypoint_name = str(next_stop)
 
-        next_route_entry = self.get_route_entry_by_name(next_stop)
+        # Use the current route index instead of searching by system name,
+        # because duplicate names can appear in round-trip routes.
+        next_route_entry = self.get_route_entry_by_index(self.route_index)
         if next_route_entry:
             self.last_next_waypoint_coords = (
                 next_route_entry.get("x", 0.0),
