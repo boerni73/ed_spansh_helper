@@ -165,6 +165,11 @@ class EdSpanshApp:
         self.is_paused = False
         self.stop_requested = False
         self.total_distance_traveled = 0.0
+        self.current_system_name = ""
+        self.current_system_coords = None
+        self.last_next_waypoint_name = ""
+        self.last_next_waypoint_coords = None
+        self.route_context_row_data = None
 
         (
             self.current_theme_name,
@@ -414,6 +419,137 @@ class EdSpanshApp:
             self.log(f"Clipboard error: {e}")
             return False
 
+    def _format_coordinate_value(self, value):
+        try:
+            numeric_value = float(value)
+            if numeric_value.is_integer():
+                return str(int(numeric_value))
+            return f"{numeric_value:.6f}".rstrip("0").rstrip(".")
+        except Exception:
+            return str(value).strip()
+
+    def format_coordinates(self, x, y, z):
+        return ",".join([
+            self._format_coordinate_value(x),
+            self._format_coordinate_value(y),
+            self._format_coordinate_value(z),
+        ])
+
+    def copy_current_system(self):
+        if not self.current_system_name:
+            messagebox.showwarning(
+                "No Current System",
+                "No current system is known yet.\nStart monitoring first or wait for the first location event."
+            )
+            return
+
+        if self.copy_to_clipboard(self.current_system_name):
+            self.log(f"Copied current system to clipboard: {self.current_system_name}")
+
+    def copy_current_coordinates(self):
+        if (
+            not self.current_system_coords
+            or not isinstance(self.current_system_coords, (list, tuple))
+            or len(self.current_system_coords) != 3
+        ):
+            messagebox.showwarning(
+                "No Current Coordinates",
+                "No current coordinates are known yet.\nStart monitoring first or wait for the first location event."
+            )
+            return
+
+        coords_text = self.format_coordinates(*self.current_system_coords)
+        if self.copy_to_clipboard(coords_text):
+            self.log(f"Copied current coordinates to clipboard: {coords_text}")
+
+    def copy_next_waypoint(self):
+        if not self.last_next_waypoint_name:
+            messagebox.showwarning(
+                "No Next Waypoint",
+                "No next waypoint has been determined yet."
+            )
+            return
+
+        if self.copy_to_clipboard(self.last_next_waypoint_name):
+            self.log(f"Copied next waypoint to clipboard: {self.last_next_waypoint_name}")
+
+    def get_route_row_data_by_item_id(self, item_id):
+        for row in self.route_table_row_data:
+            if row.get("item_id") == item_id:
+                return row
+        return None
+
+    def get_selected_route_row_data(self):
+        selection = self.route_table.selection()
+        if not selection:
+            return None
+        return self.get_route_row_data_by_item_id(selection[0])
+
+    def copy_route_row_system_name(self, row_data=None):
+        row_data = row_data or self.get_selected_route_row_data()
+        if not row_data:
+            return
+
+        system_name = str(row_data.get("system_name", "")).strip()
+        if not system_name:
+            return
+
+        if self.copy_to_clipboard(system_name):
+            self.log(f"Copied route system name to clipboard: {system_name}")
+
+    def copy_route_row_coordinates(self, row_data=None):
+        row_data = row_data or self.get_selected_route_row_data()
+        if not row_data:
+            return
+
+        x = row_data.get("x")
+        y = row_data.get("y")
+        z = row_data.get("z")
+
+        if x is None or y is None or z is None:
+            route_entry = self.get_route_entry_by_name(row_data.get("system_name"))
+            if route_entry:
+                x = route_entry.get("x")
+                y = route_entry.get("y")
+                z = route_entry.get("z")
+
+        if x is None or y is None or z is None:
+            messagebox.showwarning(
+                "No Coordinates",
+                "No coordinates are stored for this route entry."
+            )
+            return
+
+        coords_text = self.format_coordinates(x, y, z)
+        if self.copy_to_clipboard(coords_text):
+            self.log(
+                f"Copied route coordinates to clipboard: "
+                f"{row_data.get('system_name', '')} -> {coords_text}"
+            )
+
+    def copy_selected_route_system_name(self):
+        self.copy_route_row_system_name(self.route_context_row_data)
+
+    def copy_selected_route_coordinates(self):
+        self.copy_route_row_coordinates(self.route_context_row_data)
+
+    def show_route_table_context_menu(self, event):
+        item_id = self.route_table.identify_row(event.y)
+        if not item_id:
+            return
+
+        self.route_table.selection_set(item_id)
+        self.route_table.focus(item_id)
+        self.route_context_row_data = self.get_route_row_data_by_item_id(item_id)
+
+        if not self.route_context_row_data:
+            return
+
+        try:
+            self.route_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.route_context_menu.grab_release()
+
     # ------------------------------------------------------------------
     # Widget creation
     # ------------------------------------------------------------------
@@ -557,6 +693,33 @@ class EdSpanshApp:
         )
         self.copy_ship_build_btn.pack(side="left")
 
+        self.ship_build_action_row = tk.Frame(self.ship_build_frame)
+        self.ship_build_action_row.pack(fill="x", pady=(8, 0))
+
+        self.copy_current_system_btn = tk.Button(
+            self.ship_build_action_row,
+            text="Copy Current System",
+            command=self.copy_current_system,
+            padx=10,
+        )
+        self.copy_current_system_btn.pack(side="left", padx=(0, 6))
+
+        self.copy_current_coordinates_btn = tk.Button(
+            self.ship_build_action_row,
+            text="Copy Current Coordinates",
+            command=self.copy_current_coordinates,
+            padx=10,
+        )
+        self.copy_current_coordinates_btn.pack(side="left", padx=(0, 6))
+
+        self.copy_next_waypoint_btn = tk.Button(
+            self.ship_build_action_row,
+            text="Copy next Waypoint",
+            command=self.copy_next_waypoint,
+            padx=10,
+        )
+        self.copy_next_waypoint_btn.pack(side="left")
+
         # Route overview
         self.route_info_frame = tk.LabelFrame(
             self.left_frame,
@@ -653,6 +816,18 @@ class EdSpanshApp:
 
         self.route_table_item_ids = []
         self.route_table_row_data = []
+
+        self.route_context_menu = tk.Menu(self.root, tearoff=0)
+        self.route_context_menu.add_command(
+            label="Copy System Name",
+            command=self.copy_selected_route_system_name,
+        )
+        self.route_context_menu.add_command(
+            label="Copy Coordinates",
+            command=self.copy_selected_route_coordinates,
+        )
+
+        self.route_table.bind("<Button-3>", self.show_route_table_context_menu)
 
         # Cockpit navigation display
         self.dash_frame = tk.LabelFrame(
@@ -1031,6 +1206,7 @@ class EdSpanshApp:
         )
         self.ship_build_top_row.config(bg=t["panel_bg"])
         self.ship_build_label.config(bg=t["panel_bg"], fg=t["label_fg"])
+        self.ship_build_action_row.config(bg=t["panel_bg"])
 
         self.open_spansh_btn.config(
             bg=t["btn_start_bg"], fg=t["btn_fg"],
@@ -1038,6 +1214,21 @@ class EdSpanshApp:
             relief="flat", bd=0,
         )
         self.copy_ship_build_btn.config(
+            bg=t["btn_pause_bg"], fg=t["btn_fg"],
+            activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+            relief="flat", bd=0,
+        )
+        self.copy_current_system_btn.config(
+            bg=t["btn_pause_bg"], fg=t["btn_fg"],
+            activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+            relief="flat", bd=0,
+        )
+        self.copy_current_coordinates_btn.config(
+            bg=t["btn_pause_bg"], fg=t["btn_fg"],
+            activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+            relief="flat", bd=0,
+        )
+        self.copy_next_waypoint_btn.config(
             bg=t["btn_pause_bg"], fg=t["btn_fg"],
             activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
             relief="flat", bd=0,
@@ -1133,6 +1324,18 @@ class EdSpanshApp:
             )
             self.route_table.tag_configure(
                 "next_waypoint", background="#ff8c2a", foreground="#000000"
+            )
+        except Exception:
+            pass
+
+        try:
+            self.route_context_menu.config(
+                bg=t["panel_bg"],
+                fg=t["value_fg"],
+                activebackground=t["accent_fg"],
+                activeforeground="#000000",
+                bd=2,
+                relief="flat",
             )
         except Exception:
             pass
@@ -1272,6 +1475,7 @@ class EdSpanshApp:
             self.route_table.delete(item_id)
         self.route_table_item_ids = []
         self.route_table_row_data = []
+        self.route_context_row_data = None
 
     def populate_route_table(self, route_rows, route_type="UNKNOWN"):
         self.clear_route_table()
@@ -1309,6 +1513,9 @@ class EdSpanshApp:
                 "scoopable": scoopable,
                 "neutron_star": neutron_star,
                 "jumps_to_reach": jumps_to_reach,
+                "x": row.get("x"),
+                "y": row.get("y"),
+                "z": row.get("z"),
             })
 
         self.route_table.tag_configure(
@@ -1432,6 +1639,9 @@ class EdSpanshApp:
                                  else bool(item.get("is_scoopable")),
                     "neutron_star": bool(item.get("has_neutron", False)),
                     "jumps_to_reach": i,
+                    "x": item.get("x"),
+                    "y": item.get("y"),
+                    "z": item.get("z"),
                 })
 
         elif route_type == "Neutron Plotter":
@@ -1451,6 +1661,9 @@ class EdSpanshApp:
                     "scoopable": None,
                     "neutron_star": bool(item.get("neutron_star", False)),
                     "jumps_to_reach": cumulative_jumps,
+                    "x": item.get("x"),
+                    "y": item.get("y"),
+                    "z": item.get("z"),
                 })
 
         else:
@@ -1487,6 +1700,9 @@ class EdSpanshApp:
                     "scoopable": None if scoopable is None else bool(scoopable),
                     "neutron_star": bool(neutron_star),
                     "jumps_to_reach": cumulative_jumps,
+                    "x": item.get("x"),
+                    "y": item.get("y"),
+                    "z": item.get("z"),
                 })
 
         return route_rows
@@ -1614,6 +1830,9 @@ class EdSpanshApp:
             self.route_index = 0
             self.route_type = route_type
             self.last_route_file = file_path
+            self.last_next_waypoint_name = ""
+            self.last_next_waypoint_coords = None
+            self.route_context_row_data = None
 
             route_rows = self.build_route_table_data(route_type, raw_jumps)
             self.populate_route_table(route_rows, route_type=route_type)
@@ -3676,6 +3895,9 @@ class EdSpanshApp:
         self.log("Monitor stopped.")
 
     def handle_route_finished(self, system_name):
+        self.last_next_waypoint_name = ""
+        self.last_next_waypoint_coords = None
+
         self.gen_destination_reached_image(
             destination=self.my_route[-1]["name"],
             current_system=system_name,
@@ -3707,6 +3929,8 @@ class EdSpanshApp:
             return
 
         x, y, z = star_pos
+        self.current_system_name = str(system_name)
+        self.current_system_coords = (x, y, z)
 
         if is_startup:
             self.log(f"Current location detected at startup: {system_name} ({x} {y} {z})")
@@ -3739,6 +3963,18 @@ class EdSpanshApp:
         ) = result
 
         next_waypoint_jumps = self.get_waypoint_jumps(next_stop)
+
+        self.last_next_waypoint_name = str(next_stop)
+
+        next_route_entry = self.get_route_entry_by_name(next_stop)
+        if next_route_entry:
+            self.last_next_waypoint_coords = (
+                next_route_entry.get("x", 0.0),
+                next_route_entry.get("y", 0.0),
+                next_route_entry.get("z", 0.0),
+            )
+        else:
+            self.last_next_waypoint_coords = None
 
         self.highlight_route_table(system_name, next_stop)
         self.update_dashboard(
