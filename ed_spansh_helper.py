@@ -3448,7 +3448,7 @@ class EdSpanshApp:
             scoop_color = color_on if scoopable_star else color_off
 
             draw.ellipse([(55, 265), (81, 291)], fill=scoop_color)
-            draw.text((95, 266), "SCOOPABLE", fill=ed_orange, font=font_medium)
+            draw.text((95, 266), "REFUEL", fill=ed_orange, font=font_medium)
 
             neutron_dot_x = 310
             neutron_text_x = 350
