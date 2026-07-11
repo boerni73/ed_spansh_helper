@@ -165,6 +165,9 @@ class EdSpanshApp:
         self.root = root
         self.debug_mode = DEBUG_MODE
         self.debug_waypoint_entries = []
+        self.debug_auto_simulation_active = False
+        self.debug_auto_simulation_after_id = None
+        self.debug_auto_simulation_delay_ms = 800
 
         debug_suffix = " [DEBUG MODE]" if self.debug_mode else ""
         self.root.title(
@@ -887,11 +890,11 @@ class EdSpanshApp:
             )
             self.debug_frame.pack(fill="x", expand=False, padx=10, pady=5)
 
-            self.debug_row = tk.Frame(self.debug_frame)
-            self.debug_row.pack(fill="x")
+            self.debug_row_top = tk.Frame(self.debug_frame)
+            self.debug_row_top.pack(fill="x")
 
             self.debug_label = tk.Label(
-                self.debug_row,
+                self.debug_row_top,
                 text="Waypoint:",
                 font=("Arial", 10, "bold"),
             )
@@ -899,7 +902,7 @@ class EdSpanshApp:
 
             self.debug_waypoint_var = tk.StringVar()
             self.debug_waypoint_dropdown = ttk.Combobox(
-                self.debug_row,
+                self.debug_row_top,
                 textvariable=self.debug_waypoint_var,
                 state="readonly",
                 width=50,
@@ -908,12 +911,31 @@ class EdSpanshApp:
             self.debug_waypoint_dropdown.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
             self.debug_simulate_btn = tk.Button(
-                self.debug_row,
-                text="Simulate Jump",
+                self.debug_row_top,
+                text="Simulate Selected",
                 command=self.simulate_selected_jump,
                 padx=12,
             )
             self.debug_simulate_btn.pack(side="left")
+
+            self.debug_row_bottom = tk.Frame(self.debug_frame)
+            self.debug_row_bottom.pack(fill="x", pady=(8, 0))
+
+            self.debug_next_btn = tk.Button(
+                self.debug_row_bottom,
+                text="Simulate Next Waypoint",
+                command=self.simulate_next_waypoint,
+                padx=12,
+            )
+            self.debug_next_btn.pack(side="left", padx=(0, 8))
+
+            self.debug_auto_btn = tk.Button(
+                self.debug_row_bottom,
+                text="Auto Simulate Route",
+                command=self.toggle_auto_simulate_route,
+                padx=12,
+            )
+            self.debug_auto_btn.pack(side="left")
 
             self.debug_hint_label = tk.Label(
                 self.debug_frame,
@@ -1424,11 +1446,22 @@ class EdSpanshApp:
             self.debug_frame.config(
                 bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
             )
-            self.debug_row.config(bg=t["panel_bg"])
+            self.debug_row_top.config(bg=t["panel_bg"])
+            self.debug_row_bottom.config(bg=t["panel_bg"])
             self.debug_label.config(bg=t["panel_bg"], fg=t["label_fg"])
             self.debug_hint_label.config(bg=t["panel_bg"], fg=t["value_fg"])
 
             self.debug_simulate_btn.config(
+                bg=t["btn_start_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_next_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_auto_btn.config(
                 bg=t["btn_start_bg"], fg=t["btn_fg"],
                 activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
                 relief="flat", bd=0,
@@ -1749,7 +1782,10 @@ class EdSpanshApp:
         self.debug_waypoint_dropdown.configure(values=tuple(values))
 
         if values:
-            self.debug_waypoint_dropdown.current(0)
+            next_index = 0
+            if 0 <= int(self.route_index) < len(values):
+                next_index = int(self.route_index)
+            self.debug_waypoint_dropdown.current(next_index)
         else:
             self.debug_waypoint_var.set("")
 
@@ -1770,40 +1806,60 @@ class EdSpanshApp:
 
         return self.debug_waypoint_entries[selected_index]
 
-    def simulate_selected_jump(self):
+    def get_next_debug_waypoint_entry(self):
+        if not self.debug_mode:
+            return None
+
         if not self.my_route:
-            if not self.read_route_file():
-                messagebox.showwarning(
-                    "No Route Loaded",
-                    "Please load a valid route first."
-                )
-                return
+            return None
 
-        selected_item = self.get_selected_debug_waypoint_entry()
-        if not selected_item:
-            messagebox.showwarning(
-                "No Waypoint Selected",
-                "Please select a waypoint to simulate."
-            )
-            return
+        try:
+            next_index = int(self.route_index)
+        except Exception:
+            next_index = 0
 
-        route_entry = selected_item.get("entry", {})
-        route_index = int(selected_item.get("index", 0))
+        if next_index < 0:
+            next_index = 0
+
+        if next_index >= len(self.my_route):
+            return None
+
+        route_entry = self.get_route_entry_by_index(next_index)
+        if not route_entry:
+            return None
+
+        label = f"{next_index + 1} | {str(route_entry.get('name', '')).strip()}"
+
+        return {
+            "label": label,
+            "index": next_index,
+            "entry": route_entry,
+        }
+
+    def simulate_jump_to_route_entry(self, route_index, route_entry, source_label="DEBUG"):
+        if not route_entry:
+            return False
 
         system_name = str(route_entry.get("name", "")).strip()
         x = route_entry.get("x")
         y = route_entry.get("y")
         z = route_entry.get("z")
 
+        if not system_name:
+            messagebox.showerror(
+                "Missing System Name",
+                "The selected route entry has no valid system name."
+            )
+            return False
+
         if x is None or y is None or z is None:
             messagebox.showerror(
                 "Missing Coordinates",
                 "The selected waypoint has no valid coordinates."
             )
-            return
+            return False
 
         target_coords = (x, y, z)
-
         jump_distance = 0.0
 
         if (
@@ -1836,7 +1892,7 @@ class EdSpanshApp:
         }
 
         self.log(
-            f"[DEBUG] Simulating jump to waypoint {route_index + 1}: "
+            f"[DEBUG] {source_label}: waypoint {route_index + 1}: "
             f"{system_name} ({jump_distance:.2f} LY)"
         )
 
@@ -1846,6 +1902,136 @@ class EdSpanshApp:
             self.jump_detected(event_data, False)
         finally:
             self.is_paused = was_paused
+
+        if self.debug_mode and hasattr(self, "debug_waypoint_dropdown"):
+            self.refresh_debug_waypoint_dropdown()
+
+        return True
+
+    def simulate_selected_jump(self):
+        if not self.my_route:
+            if not self.read_route_file():
+                messagebox.showwarning(
+                    "No Route Loaded",
+                    "Please load a valid route first."
+                )
+                return
+
+        selected_item = self.get_selected_debug_waypoint_entry()
+        if not selected_item:
+            messagebox.showwarning(
+                "No Waypoint Selected",
+                "Please select a waypoint to simulate."
+            )
+            return
+
+        self.simulate_jump_to_route_entry(
+            route_index=int(selected_item.get("index", 0)),
+            route_entry=selected_item.get("entry", {}),
+            source_label="Simulate Selected",
+        )
+
+    def simulate_next_waypoint(self):
+        if not self.my_route:
+            if not self.read_route_file():
+                messagebox.showwarning(
+                    "No Route Loaded",
+                    "Please load a valid route first."
+                )
+                return
+
+        next_item = self.get_next_debug_waypoint_entry()
+        if not next_item:
+            messagebox.showinfo(
+                "No Next Waypoint",
+                "There is no next waypoint left to simulate."
+            )
+            return
+
+        self.simulate_jump_to_route_entry(
+            route_index=int(next_item.get("index", 0)),
+            route_entry=next_item.get("entry", {}),
+            source_label="Simulate Next",
+        )
+
+    def toggle_auto_simulate_route(self):
+        if self.debug_auto_simulation_active:
+            self.stop_auto_simulate_route()
+        else:
+            self.start_auto_simulate_route()
+
+    def start_auto_simulate_route(self):
+        if not self.my_route:
+            if not self.read_route_file():
+                messagebox.showwarning(
+                    "No Route Loaded",
+                    "Please load a valid route first."
+                )
+                return
+
+        next_item = self.get_next_debug_waypoint_entry()
+        if not next_item:
+            messagebox.showinfo(
+                "No Next Waypoint",
+                "There is no next waypoint left to simulate."
+            )
+            return
+
+        self.debug_auto_simulation_active = True
+
+        if hasattr(self, "debug_auto_btn"):
+            self.debug_auto_btn.config(text="Stop Auto Simulation")
+
+        self.log("[DEBUG] Starting automatic route simulation.")
+        self._run_auto_simulation_tick()
+
+    def stop_auto_simulate_route(self, log_message=True):
+        self.debug_auto_simulation_active = False
+
+        if self.debug_auto_simulation_after_id is not None:
+            try:
+                self.root.after_cancel(self.debug_auto_simulation_after_id)
+            except Exception:
+                pass
+            self.debug_auto_simulation_after_id = None
+
+        if hasattr(self, "debug_auto_btn"):
+            self.debug_auto_btn.config(text="Auto Simulate Route")
+
+        if log_message:
+            self.log("[DEBUG] Automatic route simulation stopped.")
+
+    def _run_auto_simulation_tick(self):
+        self.debug_auto_simulation_after_id = None
+
+        if not self.debug_auto_simulation_active:
+            return
+
+        next_item = self.get_next_debug_waypoint_entry()
+        if not next_item:
+            self.stop_auto_simulate_route(log_message=False)
+            self.log("[DEBUG] Automatic route simulation finished.")
+            return
+
+        success = self.simulate_jump_to_route_entry(
+            route_index=int(next_item.get("index", 0)),
+            route_entry=next_item.get("entry", {}),
+            source_label="Auto Simulate",
+        )
+
+        if not success:
+            self.stop_auto_simulate_route()
+            return
+
+        if self.route_index >= len(self.my_route):
+            self.stop_auto_simulate_route(log_message=False)
+            self.log("[DEBUG] Automatic route simulation finished.")
+            return
+
+        self.debug_auto_simulation_after_id = self.root.after(
+            self.debug_auto_simulation_delay_ms,
+            self._run_auto_simulation_tick,
+        )
 
     # ------------------------------------------------------------------
     # Route parsing
