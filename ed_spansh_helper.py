@@ -3486,6 +3486,43 @@ class EdSpanshApp:
 
         return "open"
 
+    def get_exobiology_body_progress_rank(self, state):
+        return {
+            "open": 0,
+            "partial": 1,
+            "completed": 2,
+        }.get(str(state or "open"), 0)
+
+    def get_exobiology_body_remaining_value(self, body):
+        if not isinstance(body, dict):
+            return 0
+
+        body_name = str(body.get("name", "") or "").strip()
+        landmarks = body.get("landmarks", [])
+
+        if not body_name or not isinstance(landmarks, list):
+            return 0
+
+        remaining_value = 0
+
+        for landmark in landmarks:
+            if not isinstance(landmark, dict):
+                continue
+
+            landmark_subtype = str(landmark.get("subtype", "") or "").strip()
+            landmark_value = int(landmark.get("value", 0) or 0)
+
+            if not landmark_subtype:
+                continue
+
+            if not self.is_exobiology_species_completed_by_body_name(
+                body_name,
+                landmark_subtype,
+            ):
+                remaining_value += landmark_value
+
+        return remaining_value
+
     def load_journal_progress_index(self):
         if not os.path.exists(JOURNAL_PROGRESS_FILE):
             return self.make_empty_journal_progress_index()
@@ -3941,7 +3978,10 @@ class EdSpanshApp:
         sorted_bodies = sorted(
             valid_bodies,
             key=lambda body: (
-                -int(body.get("landmark_value", 0) or 0),
+                self.get_exobiology_body_progress_rank(
+                    self.get_exobiology_body_progress_state(body)
+                ),
+                -self.get_exobiology_body_remaining_value(body),
                 float(body.get("distance_to_arrival", 0) or 0),
                 str(body.get("name", "") or ""),
             ),
@@ -3966,8 +4006,11 @@ class EdSpanshApp:
             valid_landmarks = sorted(
                 valid_landmarks,
                 key=lambda lm: (
+                    self.is_exobiology_species_completed_by_body_name(
+                        body_name,
+                        str(lm.get("subtype", "") or "").strip(),
+                    ),
                     -int(lm.get("value", 0) or 0),
-                    -int(lm.get("count", 0) or 0),
                     str(lm.get("subtype", "") or ""),
                 ),
             )
