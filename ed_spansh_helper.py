@@ -2129,6 +2129,9 @@ class EdSpanshApp:
         return int(route_entry.get("jumps", 0) or 0)
 
     def detect_systems_route_type(self, raw_systems):
+        has_r2r_markers = False
+        has_exo_markers = False
+
         for system in raw_systems:
             if not isinstance(system, dict):
                 continue
@@ -2141,12 +2144,23 @@ class EdSpanshApp:
                 if not isinstance(body, dict):
                     continue
 
-                if int(body.get("landmark_value", 0) or 0) > 0:
-                    return "Exobiology"
+                # Road to Riches marker
+                if (
+                    body.get("estimated_scan_value") is not None
+                    or body.get("estimated_mapping_value") is not None
+                ):
+                    has_r2r_markers = True
 
+                # Exobiology marker
                 landmarks = body.get("landmarks", [])
-                if isinstance(landmarks, list) and landmarks:
-                    return "Exobiology"
+                if isinstance(landmarks, list) and len(landmarks) > 0:
+                    has_exo_markers = True
+
+        # Prefer R2R if scan/mapping values are present
+        if has_r2r_markers:
+            return "Road to Riches"
+        if has_exo_markers:
+            return "Exobiology"
 
         return "Road to Riches"
 
