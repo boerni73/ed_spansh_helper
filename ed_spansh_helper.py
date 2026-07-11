@@ -109,9 +109,9 @@ class EdSpanshApp:
     # Shared table layout
     TABLE_LEFT = 45
     TABLE_RIGHT = 955
-    TABLE_TOP = 118
+    TABLE_TOP = 136
     TABLE_FIRST_ROW_Y_OFFSET = 42
-    TABLE_ROW_HEIGHT = 52
+    TABLE_ROW_HEIGHT = 56
 
     # Shared summary layout
     SUMMARY_BODIES_X = 60
@@ -133,21 +133,23 @@ class EdSpanshApp:
 
     # Exobiology table columns
     EXO_COL_BODY_X = 45
-    EXO_COL_DIST_X = 500
-    EXO_COL_VALUE_X = 710
-    EXO_COL_SUBTYPE_X = 740
+    EXO_COL_DIST_X = 310
+    EXO_COL_VALUE_X = 520
+    EXO_COL_SUBTYPE_X = 610
 
     # Exobiology text fitting
-    EXO_BODY_FONT_START = 24
-    EXO_BODY_FONT_MIN = 12
-    EXO_BODY_MAX_WIDTH = 360
-    EXO_SUBTYPE_FONT_START = 18
-    EXO_SUBTYPE_FONT_MIN = 10
-    EXO_SUBTYPE_MAX_WIDTH = 200
+    EXO_BODY_FONT_START = 30
+    EXO_BODY_FONT_MIN = 18
+    EXO_BODY_MAX_WIDTH = 220
+    EXO_SUBTYPE_FONT_START = 30
+    EXO_SUBTYPE_FONT_MIN = 18
+    EXO_SUBTYPE_MAX_WIDTH = 340
 
     # Exobiology summary layout
-    EXO_SUMMARY_VALUE_X = 400
-    EXO_SUMMARY_SEPARATOR_X = 320
+    EXO_SUMMARY_VALUE_X = 355
+    EXO_SUMMARY_WAYPOINTS_X = 690
+    EXO_SUMMARY_SEP_LEFT_X = 290
+    EXO_SUMMARY_SEP_RIGHT_X = 620
 
     # ------------------------------------------------------------------
     # Application lifecycle
@@ -2756,9 +2758,60 @@ class EdSpanshApp:
             ),
         )
 
+        display_rows = []
+
+        for body in sorted_bodies:
+            body_name = str(body.get("name", "") or "")
+            display_body_name = body_name.replace(f"{system_name} ", "", 1).strip()
+            body_subtype = str(body.get("subtype", "") or "")
+            body_color = self._get_body_subtype_color(body_subtype)
+            distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
+
+            landmarks = body.get("landmarks", [])
+            if not isinstance(landmarks, list):
+                landmarks = []
+
+            valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+
+            valid_landmarks = sorted(
+                valid_landmarks,
+                key=lambda lm: (
+                    -int(lm.get("value", 0) or 0),
+                    -int(lm.get("count", 0) or 0),
+                    str(lm.get("subtype", "") or ""),
+                ),
+            )
+
+            if not valid_landmarks:
+                display_rows.append({
+                    "display_body_name": display_body_name,
+                    "body_color": body_color,
+                    "distance_ls": distance_ls,
+                    "landmark_value": int(body.get("landmark_value", 0) or 0),
+                    "landmark_subtype": "-",
+                })
+                continue
+
+            for idx, landmark in enumerate(valid_landmarks):
+                landmark_subtype = str(landmark.get("subtype", "-") or "-")
+                landmark_count = int(landmark.get("count", 0) or 0)
+                landmark_value = int(landmark.get("value", 0) or 0)
+
+                if landmark_count > 1:
+                    landmark_subtype = f"{landmark_subtype} x{landmark_count}"
+
+                display_rows.append({
+                    "display_body_name": display_body_name if idx == 0 else "",
+                    "body_color": body_color,
+                    "distance_ls": distance_ls if idx == 0 else None,
+                    "landmark_value": landmark_value,
+                    "landmark_subtype": landmark_subtype,
+                })
+
         if max_rows is None:
-            return sorted_bodies
-        return sorted_bodies[:max_rows]
+            return display_rows
+
+        return display_rows[:max_rows]
 
     def get_exobiology_totals(self, system_name):
         route_entry = self.get_route_entry_by_name(system_name)
@@ -2780,12 +2833,26 @@ class EdSpanshApp:
             )
         ]
 
+        landmark_total = 0
+
+        for body in valid_bodies:
+            landmarks = body.get("landmarks", [])
+            if isinstance(landmarks, list):
+                valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+            else:
+                valid_landmarks = []
+
+            if valid_landmarks:
+                landmark_total += sum(
+                    int(lm.get("value", 0) or 0)
+                    for lm in valid_landmarks
+                )
+            else:
+                landmark_total += int(body.get("landmark_value", 0) or 0)
+
         return {
             "count": len(valid_bodies),
-            "landmark_total": sum(
-                int(body.get("landmark_value", 0) or 0)
-                for body in valid_bodies
-            ),
+            "landmark_total": landmark_total,
         }
 
     def distance(self, destination_coord, current_coord):
@@ -2991,11 +3058,11 @@ class EdSpanshApp:
     def _load_nav_image_fonts(self, font_name="arial.ttf"):
         try:
             return {
-                "big": ImageFont.truetype(font_name, 32),
-                "medium": ImageFont.truetype(font_name, 20),
-                "tiny": ImageFont.truetype(font_name, 12),
-                "table_header": ImageFont.truetype(font_name, 19),
-                "table_row": ImageFont.truetype(font_name, 28),
+                "big": ImageFont.truetype(font_name, 36),
+                "medium": ImageFont.truetype(font_name, 24),
+                "tiny": ImageFont.truetype(font_name, 14),
+                "table_header": ImageFont.truetype(font_name, 22),
+                "table_row": ImageFont.truetype(font_name, 30),
             }
         except IOError:
             default_font = ImageFont.load_default()
@@ -3087,7 +3154,7 @@ class EdSpanshApp:
         )
 
         draw.line([(35, 68), (965, 68)], fill=colors["ed_orange_dim"], width=1)
-        draw.line([(35, 108), (965, 108)], fill=colors["line_dim"], width=1)
+        draw.line([(35, 128), (965, 128)], fill=colors["line_dim"], width=1)
         draw.line(
             [(35, layout["summary_line_y"]), (965, layout["summary_line_y"])],
             fill=colors["line_dim"],
@@ -3118,36 +3185,36 @@ class EdSpanshApp:
         )
         current_system_font = self._fit_font(
             draw, str(current_system).upper(), font_name,
-            start_size=16, min_size=10, max_width=380
+            start_size=26, min_size=16, max_width=420
         )
         next_waypoint_font = self._fit_font(
             draw, str(next_waypoint_text), font_name,
-            start_size=16, min_size=10, max_width=380
+            start_size=26, min_size=16, max_width=420
         )
 
         draw.text((40, 30), title_text, fill=colors["ed_orange"], font=title_font)
 
         draw.text(
-            (42, 74),
+            (42, 76),
             "CURRENT SYSTEM",
             fill=colors["ed_orange_soft"],
             font=fonts["tiny"]
         )
         draw.text(
-            (42, 88),
+            (42, 94),
             str(current_system).upper(),
             fill=colors["ed_cyan"],
             font=current_system_font
         )
 
         draw.text(
-            (520, 74),
+            (520, 76),
             "NEXT WAYPOINT",
             fill=colors["ed_orange_soft"],
             font=fonts["tiny"]
         )
         draw.text(
-            (520, 88),
+            (520, 94),
             str(next_waypoint_text),
             fill=colors["ed_orange"],
             font=next_waypoint_font
@@ -3221,7 +3288,7 @@ class EdSpanshApp:
         return [
             ("BODY", self.EXO_COL_BODY_X, "left"),
             ("DIST", self.EXO_COL_DIST_X, "right"),
-            ("LANDMARK VALUE", self.EXO_COL_VALUE_X, "right"),
+            ("VALUE", self.EXO_COL_VALUE_X, "right"),
             ("LANDMARK SUBTYPE", self.EXO_COL_SUBTYPE_X, "left"),
         ]
 
@@ -3332,7 +3399,13 @@ class EdSpanshApp:
             "separators": [self.R2R_SUMMARY_SEP_LEFT_X, self.R2R_SUMMARY_SEP_RIGHT_X],
         }
 
-    def _get_exobiology_summary_config(self, body_count, landmark_total, colors):
+    def _get_exobiology_summary_config(
+        self,
+        body_count,
+        landmark_total,
+        waypoints_left,
+        colors,
+    ):
         return {
             "items": [
                 {
@@ -3343,12 +3416,21 @@ class EdSpanshApp:
                 },
                 {
                     "x": self.EXO_SUMMARY_VALUE_X,
-                    "label": "LANDMARK TOTAL",
+                    "label": "VALUE TOTAL",
                     "value": self._format_int(landmark_total),
                     "color": colors["ed_orange"],
                 },
+                {
+                    "x": self.EXO_SUMMARY_WAYPOINTS_X,
+                    "label": "WAYPOINTS LEFT",
+                    "value": f"{int(waypoints_left or 0)}",
+                    "color": colors["table_text"],
+                },
             ],
-            "separators": [self.EXO_SUMMARY_SEPARATOR_X],
+            "separators": [
+                self.EXO_SUMMARY_SEP_LEFT_X,
+                self.EXO_SUMMARY_SEP_RIGHT_X,
+            ],
         }
 
     def _save_kneeboard_image(self, img):
@@ -3678,6 +3760,7 @@ class EdSpanshApp:
         bodies,
         totals,
         next_waypoint_jumps=0,
+        waypoints_left=0,
     ):
         colors = self._get_nav_image_palette()
         fonts = self._load_nav_image_fonts()
@@ -3725,23 +3808,48 @@ class EdSpanshApp:
         for i, body in enumerate(bodies):
             row_y = self._get_table_row_y(table_top, i)
 
-            body_name = str(body.get("name", "") or "")
-            display_body_name = body_name.replace(f"{current_system} ", "", 1).strip()
-            subtype = str(body.get("subtype", "") or "")
-            body_color = self._get_body_subtype_color(subtype)
+            display_body_name = str(body.get("display_body_name", "") or "")
+            body_color = body.get("body_color", colors["table_text"])
+            distance_ls = body.get("distance_ls")
+            landmark_value = body.get("landmark_value")
+            landmark_subtype = str(body.get("landmark_subtype", "-") or "-")
 
-            distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
-            landmark_value = int(body.get("landmark_value", 0) or 0)
-            landmark_subtype = self._get_primary_landmark_subtype(body)
+            if display_body_name:
+                body_font = self._fit_font(
+                    draw,
+                    display_body_name,
+                    font_name,
+                    start_size=self.EXO_BODY_FONT_START,
+                    min_size=self.EXO_BODY_FONT_MIN,
+                    max_width=self.EXO_BODY_MAX_WIDTH,
+                )
+                draw.text(
+                    (self.EXO_COL_BODY_X, row_y),
+                    display_body_name,
+                    fill=body_color,
+                    font=body_font
+                )
 
-            body_font = self._fit_font(
-                draw,
-                display_body_name,
-                font_name,
-                start_size=self.EXO_BODY_FONT_START,
-                min_size=self.EXO_BODY_FONT_MIN,
-                max_width=self.EXO_BODY_MAX_WIDTH,
-            )
+            if distance_ls is not None:
+                dist_text = f"{self._format_int(distance_ls)} LS"
+                dist_width = self._get_text_width(draw, dist_text, fonts["table_row"])
+                draw.text(
+                    (self.EXO_COL_DIST_X - dist_width, row_y),
+                    dist_text,
+                    fill=colors["table_text"],
+                    font=fonts["table_row"]
+                )
+
+            if landmark_value is not None:
+                value_text = self._format_int(landmark_value)
+                value_width = self._get_text_width(draw, value_text, fonts["table_row"])
+                draw.text(
+                    (self.EXO_COL_VALUE_X - value_width, row_y),
+                    value_text,
+                    fill=colors["ed_orange"],
+                    font=fonts["table_row"]
+                )
+
             subtype_font = self._fit_font(
                 draw,
                 landmark_subtype,
@@ -3751,31 +3859,6 @@ class EdSpanshApp:
                 max_width=self.EXO_SUBTYPE_MAX_WIDTH,
             )
 
-            draw.text(
-                (self.EXO_COL_BODY_X, row_y),
-                display_body_name,
-                fill=body_color,
-                font=body_font
-            )
-
-            dist_text = f"{self._format_int(distance_ls)} LS"
-            value_text = self._format_int(landmark_value)
-
-            dist_width = self._get_text_width(draw, dist_text, fonts["table_row"])
-            value_width = self._get_text_width(draw, value_text, fonts["table_row"])
-
-            draw.text(
-                (self.EXO_COL_DIST_X - dist_width, row_y),
-                dist_text,
-                fill=colors["table_text"],
-                font=fonts["table_row"]
-            )
-            draw.text(
-                (self.EXO_COL_VALUE_X - value_width, row_y),
-                value_text,
-                fill=colors["ed_orange"],
-                font=fonts["table_row"]
-            )
             draw.text(
                 (self.EXO_COL_SUBTYPE_X, row_y + 4),
                 landmark_subtype,
@@ -3789,6 +3872,7 @@ class EdSpanshApp:
         summary_config = self._get_exobiology_summary_config(
             body_count=body_count,
             landmark_total=landmark_total,
+            waypoints_left=waypoints_left,
             colors=colors,
         )
 
@@ -4094,6 +4178,7 @@ class EdSpanshApp:
                     bodies=exo_bodies,
                     totals=exo_totals,
                     next_waypoint_jumps=next_waypoint_jumps,
+                    waypoints_left=jumps_remain,
                 )
 
             elif self.route_type.startswith("Road to Riches"):
