@@ -30,6 +30,7 @@ try:
 except locale.Error:
     pass
 
+__version__ = "0.1.0"
 
 # ----------------------------------------------------------------------
 # Default configuration
@@ -156,7 +157,7 @@ class EdSpanshApp:
     # ------------------------------------------------------------------
     def __init__(self, root):
         self.root = root
-        self.root.title("Elite Dangerous - Spansh VR Navigator")
+        self.root.title(f"Elite Dangerous - Spansh VR Navigator v{__version__}")
         self.root.geometry("1500x950")
         self.root.minsize(1200, 1100)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -611,6 +612,17 @@ class EdSpanshApp:
             pady=5, relief="raised", bd=3, padx=14,
         )
         self.settings_btn.pack(side="left", padx=(0, 2))
+
+        self.about_btn = tk.Button(
+            self.btn_frame,
+            text="ⓘ  About",
+            command=self.open_about_dialog,
+            bg=BTN_BG, fg="#ff7300",
+            activebackground=BTN_BG_ACTIVE, activeforeground="#ffaa44",
+            font=("Arial", 14, "bold"),
+            pady=5, relief="raised", bd=3, padx=14,
+        )
+        self.about_btn.pack(side="left", padx=(0, 2))
 
         self.exit_btn = tk.Button(
             self.btn_frame,
@@ -1301,6 +1313,11 @@ class EdSpanshApp:
             activebackground=BTN_BG_ACTIVE, activeforeground="#ffaa44",
             bd=3,
         )
+        self.about_btn.config(
+            bg=BTN_BG, fg="#ff7300",
+            activebackground=BTN_BG_ACTIVE, activeforeground="#ffaa44",
+            bd=3,
+        )
         self.exit_btn.config(
             bg=BTN_BG, fg=BTN_FG_STOP,
             activebackground=BTN_BG_ACTIVE, activeforeground=BTN_FG_STOP,
@@ -1854,6 +1871,166 @@ class EdSpanshApp:
         )
         self.save_settings()
         return True
+
+    # ------------------------------------------------------------------
+    # About dialog
+    # ------------------------------------------------------------------
+    def open_about_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"About - Spansh VR Navigator v{__version__}")
+        dialog.geometry("700x420")
+        dialog.minsize(620, 360)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        t = THEMES[self.current_theme_name]
+        dialog.config(bg=t["bg"])
+
+        main_frame = tk.Frame(dialog, bg=t["bg"], padx=18, pady=18)
+        main_frame.pack(fill="both", expand=True)
+
+        # --------------------------------------------------------------
+        # Top area: icon + title/version
+        # --------------------------------------------------------------
+        top_frame = tk.Frame(main_frame, bg=t["bg"])
+        top_frame.pack(fill="x", pady=(0, 14))
+
+        icon_canvas = tk.Canvas(
+            top_frame,
+            width=92,
+            height=92,
+            bg=t["bg"],
+            highlightthickness=0,
+            bd=0,
+        )
+        icon_canvas.pack(side="left", padx=(0, 16))
+
+        # Small custom HUD / navigator style icon
+        cx, cy = 46, 46
+        icon_canvas.create_oval(10, 10, 82, 82, outline=t["accent_fg"], width=2)
+        icon_canvas.create_oval(20, 20, 72, 72, outline=t["panel_border"], width=1)
+        icon_canvas.create_line(cx, 14, cx, 78, fill=t["accent_fg"], width=2)
+        icon_canvas.create_line(14, cy, 78, cy, fill=t["accent_fg"], width=2)
+        icon_canvas.create_oval(40, 40, 52, 52, fill=t["accent_fg"], outline=t["accent_fg"])
+        icon_canvas.create_line(24, 24, 34, 34, fill=t["value_fg"], width=2)
+        icon_canvas.create_line(58, 58, 68, 68, fill=t["value_fg"], width=2)
+        icon_canvas.create_line(58, 34, 68, 24, fill=t["label_fg"], width=2)
+        icon_canvas.create_line(24, 68, 34, 58, fill=t["label_fg"], width=2)
+
+        text_frame = tk.Frame(top_frame, bg=t["bg"])
+        text_frame.pack(side="left", fill="both", expand=True)
+
+        tk.Label(
+            text_frame,
+            text="Elite Dangerous - Spansh VR Navigator",
+            font=("Arial", 16, "bold"),
+            bg=t["bg"],
+            fg=t["label_fg"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(6, 6))
+
+        tk.Label(
+            text_frame,
+            text=f"Version {__version__}",
+            font=("Consolas", 11, "bold"),
+            bg=t["bg"],
+            fg=t["accent_fg"],
+            anchor="w",
+        ).pack(fill="x", pady=(0, 2))
+
+        tk.Label(
+            text_frame,
+            text="VR route helper for Elite Dangerous / Spansh",
+            font=("Arial", 10),
+            bg=t["bg"],
+            fg=t["value_fg"],
+            anchor="w",
+        ).pack(fill="x")
+
+        # --------------------------------------------------------------
+        # Separator
+        # --------------------------------------------------------------
+        tk.Frame(main_frame, bg=t["panel_border"], height=1).pack(fill="x", pady=(4, 14))
+
+        # --------------------------------------------------------------
+        # Information block
+        # --------------------------------------------------------------
+        info_frame = tk.Frame(main_frame, bg=t["bg"])
+        info_frame.pack(fill="both", expand=True)
+
+        info_lines = [
+            "Author: Bernard Härri (CMDR Weedy Gonzalez), but mostly LLMs",
+            "Purpose: VR navigation helper for Elite Dangerous / Spansh routes",
+            "Supported routes: Galaxy Plotter, Neutron Plotter, Road to Riches, Exobiology",
+            "Build command: pyinstaller --noconsole --onefile ed_spansh_helper.py",
+        ]
+
+        for line in info_lines:
+            tk.Label(
+                info_frame,
+                text=line,
+                font=("Arial", 10),
+                bg=t["bg"],
+                fg=t["fg"],
+                anchor="w",
+                justify="left",
+            ).pack(fill="x", pady=2)
+
+        tk.Frame(main_frame, bg=t["panel_border"], height=1).pack(fill="x", pady=14)
+
+        tk.Label(
+            main_frame,
+            text=(
+                "This tool monitors Elite Dangerous journal files and generates\n"
+                "a cockpit / kneeboard navigation image for VR use."
+            ),
+            font=("Arial", 10),
+            bg=t["bg"],
+            fg=t["value_fg"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(0, 16))
+
+        # --------------------------------------------------------------
+        # Bottom buttons
+        # --------------------------------------------------------------
+        button_row = tk.Frame(main_frame, bg=t["bg"])
+        button_row.pack(fill="x", side="bottom")
+
+        def copy_version():
+            if self.copy_to_clipboard(__version__):
+                self.log(f"Copied app version to clipboard: {__version__}")
+
+        tk.Button(
+            button_row,
+            text="Copy Version",
+            command=copy_version,
+            bg=t["btn_pause_bg"],
+            fg=t["btn_fg"],
+            activebackground=t["btn_start_bg"],
+            activeforeground=t["btn_fg"],
+            relief="flat",
+            bd=0,
+            padx=12,
+            pady=6,
+            font=("Arial", 10, "bold"),
+        ).pack(side="left")
+
+        tk.Button(
+            button_row,
+            text="Close",
+            command=dialog.destroy,
+            bg=t["btn_start_bg"],
+            fg=t["btn_fg"],
+            activebackground=t["btn_pause_bg"],
+            activeforeground=t["btn_fg"],
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=6,
+            font=("Arial", 10, "bold"),
+        ).pack(side="right")
 
     # ------------------------------------------------------------------
     # Settings dialog
