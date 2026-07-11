@@ -43,6 +43,15 @@ if DEBUG_MODE:
 # ----------------------------------------------------------------------
 SETTINGS_FILE = os.path.join(os.path.expanduser("~"), "ed_spansh_settings.json")
 
+JOURNAL_PROGRESS_FILE = os.path.join(
+    os.path.expanduser("~"), "ed_journal_progress.json"
+)
+
+# On startup, replay the last processed journal plus this many older journals.
+# This makes progress reconstruction more robust if the helper app was not
+# running continuously or was not closed cleanly.
+JOURNAL_PROGRESS_REPLAY_TAIL_COUNT = 1
+
 DEFAULT_JOURNAL_DIR = os.path.expanduser(
     r"~\Saved Games\Frontier Developments\Elite Dangerous"
 )
@@ -190,6 +199,8 @@ class EdSpanshApp:
         self.last_next_waypoint_name = ""
         self.last_next_waypoint_coords = None
         self.route_context_row_data = None
+        self.progress_index = self.make_empty_journal_progress_index()
+        self.progress_index_dirty = False
 
         (
             self.current_theme_name,
@@ -205,6 +216,7 @@ class EdSpanshApp:
         self.ship_builds = []
 
         self.create_widgets()
+        self.progress_index = self.load_journal_progress_index()
         self.setup_table_style()
         self.setup_combobox_style()
         self.apply_theme(self.current_theme_name)
@@ -213,9 +225,13 @@ class EdSpanshApp:
         self.root.after(300, self.check_vr_setup_on_startup)
 
     def on_close(self):
+        if self.debug_mode and self.debug_auto_simulation_active:
+            self.stop_auto_simulate_route(log_message=False)
+
         self.stop_requested = True
         self.monitoring_active = False
         self.save_settings()
+        self.save_journal_progress_index()
         self.root.destroy()
 
     def load_last_route_on_startup(self):
@@ -3204,6 +3220,456 @@ class EdSpanshApp:
         }.get(mode, "#808080")
 
     # ------------------------------------------------------------------
+    # Journal progress index
+    # ------------------------------------------------------------------
+    def make_empty_journal_progress_index(self):
+        return {
+            "version": 1,
+            "meta": {
+                "last_processed_journal": "",
+            },
+            "processed_files": {},
+            "body_registry": {},
+            "exobiology": {
+                "species_status": {},
+            },
+            "road_to_riches": {
+                "body_status": {},
+            },
+        }
+
+    def ensure_journal_progress_index_structure(self, data):
+        if not isinstance(data, dict):
+            data = self.make_empty_journal_progress_index()
+
+        data.setdefault("version", 1)
+        data.setdefault("meta", {})
+        data["meta"].setdefault("last_processed_journal", "")
+        data.setdefault("processed_files", {})
+        data.setdefault("body_registry", {})
+
+        data.setdefault("exobiology", {})
+        data["exobiology"].setdefault("species_status", {})
+
+        data.setdefault("road_to_riches", {})
+        data["road_to_riches"].setdefault("body_status", {})
+
+        return data
+
+    def normalize_body_name(self, body_name):
+        return str(body_name or "").strip().lower()
+
+    def make_body_registry_key(self, system_address, body_id):
+        return f"{system_address}|{body_id}"
+
+    def update_body_registry(self, system_address, body_id, body_name, timestamp=""):
+        if system_address is None or body_id is None:
+            return False
+
+        body_name = str(body_name or "").strip()
+        if not body_name:
+            return False
+
+        key = self.make_body_registry_key(system_address, body_id)
+        body_registry = self.progress_index["body_registry"]
+
+        existing = body_registry.get(key, {})
+        updated = False
+
+        if not existing:
+            body_registry[key] = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "normalized_body_name": self.normalize_body_name(body_name),
+                "last_timestamp": str(timestamp or "").strip(),
+            }
+            updated = True
+        else:
+            if existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                existing["normalized_body_name"] = self.normalize_body_name(body_name)
+                updated = True
+
+            timestamp = str(timestamp or "").strip()
+            if timestamp and existing.get("last_timestamp") != timestamp:
+                existing["last_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated
+
+    def get_registered_body_name(self, system_address, body_id, default=""):
+        key = self.make_body_registry_key(system_address, body_id)
+        entry = self.progress_index.get("body_registry", {}).get(key, {})
+        return str(entry.get("body_name", default) or default)
+
+    def get_registered_body_entry(self, system_address, body_id):
+        key = self.make_body_registry_key(system_address, body_id)
+        return self.progress_index.get("body_registry", {}).get(key)
+
+    def get_exobiology_species_progress(self, system_address, body, species):
+        key = f"{system_address}|{body}|{species}"
+        return self.progress_index.get("exobiology", {}).get("species_status", {}).get(key)
+
+    def get_exobiology_body_progress(self, system_address, body):
+        prefix = f"{system_address}|{body}|"
+        species_status = self.progress_index.get("exobiology", {}).get("species_status", {})
+
+        entries = [
+            value for key, value in species_status.items()
+            if str(key).startswith(prefix)
+        ]
+
+        entries.sort(
+            key=lambda item: (
+                -self.get_exobiology_status_rank(item.get("status")),
+                str(item.get("species_localised", "") or item.get("species", "")),
+            )
+        )
+        return entries
+
+    def is_exobiology_species_completed(self, system_address, body, species):
+        entry = self.get_exobiology_species_progress(system_address, body, species)
+        if not entry:
+            return False
+        return str(entry.get("status", "")).strip() == "Analyse"
+
+    def get_r2r_body_progress_by_id(self, system_address, body_id):
+        key = f"{system_address}|{body_id}"
+        return self.progress_index.get("road_to_riches", {}).get("body_status", {}).get(key)
+
+    def get_r2r_body_progress_by_name(self, body_name):
+        normalized_name = self.normalize_body_name(body_name)
+        if not normalized_name:
+            return None
+
+        body_status = self.progress_index.get("road_to_riches", {}).get("body_status", {})
+        for entry in body_status.values():
+            if self.normalize_body_name(entry.get("body_name", "")) == normalized_name:
+                return entry
+
+        return None
+
+    def is_r2r_body_scanned_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return False
+        return bool(entry.get("fss_scanned", False))
+
+    def is_r2r_body_mapped_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return False
+        return bool(entry.get("mapped", False))
+
+    def load_journal_progress_index(self):
+        if not os.path.exists(JOURNAL_PROGRESS_FILE):
+            return self.make_empty_journal_progress_index()
+
+        try:
+            with open(JOURNAL_PROGRESS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return self.ensure_journal_progress_index_structure(data)
+        except Exception as e:
+            self.log(f"Warning: Could not load journal progress index: {e}")
+            return self.make_empty_journal_progress_index()
+
+    def save_journal_progress_index(self):
+        try:
+            data = self.ensure_journal_progress_index_structure(self.progress_index)
+
+            progress_dir = os.path.dirname(JOURNAL_PROGRESS_FILE)
+            if progress_dir:
+                os.makedirs(progress_dir, exist_ok=True)
+
+            with open(JOURNAL_PROGRESS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+            self.progress_index_dirty = False
+        except Exception as e:
+            self.log(f"Warning: Could not save journal progress index: {e}")
+
+    def mark_journal_progress_dirty(self):
+        self.progress_index_dirty = True
+
+    def get_sorted_journal_files(self):
+        journal_files = glob.glob(os.path.join(self.journal_dir, "Journal.*.log"))
+        return sorted(
+            journal_files,
+            key=lambda p: os.path.basename(p).lower(),
+        )
+
+    def update_processed_journal_file(self, file_path):
+        file_name = os.path.basename(file_path)
+
+        try:
+            stat_result = os.stat(file_path)
+            size = int(stat_result.st_size)
+            mtime = float(stat_result.st_mtime)
+        except Exception:
+            size = 0
+            mtime = 0.0
+
+        self.progress_index["processed_files"][file_name] = {
+            "size": size,
+            "mtime": mtime,
+        }
+        self.progress_index["meta"]["last_processed_journal"] = file_name
+        self.mark_journal_progress_dirty()
+
+    def sync_journal_progress_from_existing_logs(self):
+        journal_files = self.get_sorted_journal_files()
+        if not journal_files:
+            return
+
+        last_processed_journal = str(
+            self.progress_index.get("meta", {}).get("last_processed_journal", "")
+        ).strip()
+
+        start_index = 0
+
+        if last_processed_journal:
+            journal_names = [os.path.basename(path) for path in journal_files]
+            if last_processed_journal in journal_names:
+                last_index = journal_names.index(last_processed_journal)
+                start_index = max(0, last_index - JOURNAL_PROGRESS_REPLAY_TAIL_COUNT)
+
+        files_to_scan = journal_files[start_index:]
+
+        self.thread_safe_log(
+            f"Journal progress sync: scanning {len(files_to_scan)} journal file(s) "
+            f"starting from index {start_index + 1}."
+        )
+
+        for file_path in files_to_scan:
+            self.process_journal_file_for_progress(file_path)
+
+        if self.progress_index_dirty:
+            self.save_journal_progress_index()
+
+    def process_journal_entry_for_progress(self, log_entry):
+        if not isinstance(log_entry, dict):
+            return False
+
+        event_name = str(log_entry.get("event", "")).strip()
+
+        if event_name == "ScanOrganic":
+            return self.process_exobiology_event(log_entry)
+
+        if event_name == "Scan" and str(log_entry.get("ScanType", "")).strip() == "Detailed":
+            return self.process_r2r_scan_event(log_entry)
+
+        if event_name == "SAAMappingComplete":
+            return self.process_r2r_mapping_event(log_entry)
+
+        return False
+
+    def get_exobiology_status_rank(self, status):
+        return {
+            "Log": 1,
+            "Sample": 2,
+            "Analyse": 3,
+        }.get(str(status or ""), 0)
+
+    def process_exobiology_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body = log_entry.get("Body")
+        species = str(log_entry.get("Species", "")).strip()
+        scan_type = str(log_entry.get("ScanType", "")).strip()
+
+        if system_address is None or body is None or not species or not scan_type:
+            return False
+
+        body_name = self.get_registered_body_name(system_address, body, default="")
+        key = f"{system_address}|{body}|{species}"
+        species_status = self.progress_index["exobiology"]["species_status"]
+
+        existing = species_status.get(key, {})
+        old_rank = self.get_exobiology_status_rank(existing.get("status"))
+        new_rank = self.get_exobiology_status_rank(scan_type)
+
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body": body,
+                "body_name": body_name,
+                "species": species,
+                "species_localised": str(log_entry.get("Species_Localised", "")).strip(),
+                "genus": str(log_entry.get("Genus", "")).strip(),
+                "genus_localised": str(log_entry.get("Genus_Localised", "")).strip(),
+                "status": scan_type,
+                "last_timestamp": str(log_entry.get("timestamp", "")).strip(),
+            }
+            species_status[key] = existing
+            updated = True
+        else:
+            if new_rank > old_rank:
+                existing["status"] = scan_type
+                updated = True
+
+            species_localised = str(log_entry.get("Species_Localised", "")).strip()
+            genus = str(log_entry.get("Genus", "")).strip()
+            genus_localised = str(log_entry.get("Genus_Localised", "")).strip()
+            timestamp = str(log_entry.get("timestamp", "")).strip()
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if species_localised and existing.get("species_localised") != species_localised:
+                existing["species_localised"] = species_localised
+                updated = True
+
+            if genus and existing.get("genus") != genus:
+                existing["genus"] = genus
+                updated = True
+
+            if genus_localised and existing.get("genus_localised") != genus_localised:
+                existing["genus_localised"] = genus_localised
+                updated = True
+
+            if timestamp and existing.get("last_timestamp") != timestamp:
+                existing["last_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated
+
+    def process_r2r_scan_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body_id = log_entry.get("BodyID")
+        body_name = str(log_entry.get("BodyName", "")).strip()
+        timestamp = str(log_entry.get("timestamp", "")).strip()
+
+        if system_address is None or body_id is None or not body_name:
+            return False
+
+        registry_updated = self.update_body_registry(
+            system_address=system_address,
+            body_id=body_id,
+            body_name=body_name,
+            timestamp=timestamp,
+        )
+
+        key = f"{system_address}|{body_id}"
+        body_status = self.progress_index["road_to_riches"]["body_status"]
+
+        existing = body_status.get(key, {})
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "fss_scanned": True,
+                "mapped": bool(log_entry.get("WasMapped", False)),
+                "last_scan_timestamp": timestamp,
+                "last_mapping_timestamp": "",
+            }
+            body_status[key] = existing
+            updated = True
+        else:
+            if not existing.get("fss_scanned", False):
+                existing["fss_scanned"] = True
+                updated = True
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if timestamp and existing.get("last_scan_timestamp") != timestamp:
+                existing["last_scan_timestamp"] = timestamp
+                updated = True
+
+            if bool(log_entry.get("WasMapped", False)) and not existing.get("mapped", False):
+                existing["mapped"] = True
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated or registry_updated
+
+    def process_r2r_mapping_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body_id = log_entry.get("BodyID")
+        body_name = str(log_entry.get("BodyName", "")).strip()
+        timestamp = str(log_entry.get("timestamp", "")).strip()
+
+        if system_address is None or body_id is None or not body_name:
+            return False
+
+        registry_updated = self.update_body_registry(
+            system_address=system_address,
+            body_id=body_id,
+            body_name=body_name,
+            timestamp=timestamp,
+        )
+
+        key = f"{system_address}|{body_id}"
+        body_status = self.progress_index["road_to_riches"]["body_status"]
+
+        existing = body_status.get(key, {})
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "fss_scanned": False,
+                "mapped": True,
+                "last_scan_timestamp": "",
+                "last_mapping_timestamp": timestamp,
+            }
+            body_status[key] = existing
+            updated = True
+        else:
+            if not existing.get("mapped", False):
+                existing["mapped"] = True
+                updated = True
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if timestamp and existing.get("last_mapping_timestamp") != timestamp:
+                existing["last_mapping_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated or registry_updated
+
+    def process_journal_file_for_progress(self, file_path):
+        file_name = os.path.basename(file_path)
+        self.thread_safe_log(f"Progress scan: {file_name}")
+
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    try:
+                        log_entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    self.process_journal_entry_for_progress(log_entry)
+
+            self.update_processed_journal_file(file_path)
+
+        except Exception as e:
+            self.thread_safe_log(f"Progress scan error in {file_name}: {e}")
+
+    # ------------------------------------------------------------------
     # Route logic
     # ------------------------------------------------------------------
     def get_route_entry_by_name(self, system_name):
@@ -4840,6 +5306,7 @@ class EdSpanshApp:
             self.ui_call(self.stop_monitoring)
             return
 
+        self.sync_journal_progress_from_existing_logs()
         start_event = self.find_current_system_on_startup(current_journal)
         if start_event:
             self.ui_call(self.jump_detected, start_event, True)
@@ -4872,6 +5339,7 @@ class EdSpanshApp:
                             encoding="utf-8",
                             errors="ignore"
                         )
+                        self.update_processed_journal_file(current_journal)
                         file.seek(0, os.SEEK_END)
 
                     line = file.readline()
@@ -4881,8 +5349,15 @@ class EdSpanshApp:
 
                     try:
                         log_entry = json.loads(line)
+
+                        progress_changed = self.process_journal_entry_for_progress(log_entry)
+                        if progress_changed:
+                            self.update_processed_journal_file(current_journal)
+                            self.save_journal_progress_index()
+
                         if log_entry.get("event") == "FSDJump":
                             self.ui_call(self.jump_detected, log_entry, False)
+
                     except json.JSONDecodeError:
                         continue
             finally:
