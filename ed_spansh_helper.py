@@ -8,6 +8,7 @@
 ##########################################################################
 
 import os
+import sys
 import json
 import time
 import glob
@@ -31,6 +32,11 @@ except locale.Error:
     pass
 
 __version__ = "0.1.0"
+
+DEBUG_MODE = "--debug" in sys.argv
+
+if DEBUG_MODE:
+    sys.argv = [arg for arg in sys.argv if arg != "--debug"]
 
 # ----------------------------------------------------------------------
 # Default configuration
@@ -157,9 +163,15 @@ class EdSpanshApp:
     # ------------------------------------------------------------------
     def __init__(self, root):
         self.root = root
-        self.root.title(f"Elite Dangerous - Spansh VR Navigator v{__version__}")
-        self.root.geometry("1500x950")
-        self.root.minsize(1200, 1100)
+        self.debug_mode = DEBUG_MODE
+        self.debug_waypoint_entries = []
+
+        debug_suffix = " [DEBUG MODE]" if self.debug_mode else ""
+        self.root.title(
+            f"Elite Dangerous - Spansh VR Navigator v{__version__}{debug_suffix}"
+        )
+        self.root.geometry("1500x1080" if self.debug_mode else "1500x950")
+        self.root.minsize(1200, 1230 if self.debug_mode else 1100)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.my_route = []
@@ -865,6 +877,53 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
+        # Debug: simulate jump
+        if self.debug_mode:
+            self.debug_frame = tk.LabelFrame(
+                self.left_frame,
+                text=" Debug / Simulate Jump ",
+                font=("Arial", 10, "bold"),
+                padx=10, pady=10,
+            )
+            self.debug_frame.pack(fill="x", expand=False, padx=10, pady=5)
+
+            self.debug_row = tk.Frame(self.debug_frame)
+            self.debug_row.pack(fill="x")
+
+            self.debug_label = tk.Label(
+                self.debug_row,
+                text="Waypoint:",
+                font=("Arial", 10, "bold"),
+            )
+            self.debug_label.pack(side="left", padx=(0, 8))
+
+            self.debug_waypoint_var = tk.StringVar()
+            self.debug_waypoint_dropdown = ttk.Combobox(
+                self.debug_row,
+                textvariable=self.debug_waypoint_var,
+                state="readonly",
+                width=50,
+                style="Orange.TCombobox",
+            )
+            self.debug_waypoint_dropdown.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+            self.debug_simulate_btn = tk.Button(
+                self.debug_row,
+                text="Simulate Jump",
+                command=self.simulate_selected_jump,
+                padx=12,
+            )
+            self.debug_simulate_btn.pack(side="left")
+
+            self.debug_hint_label = tk.Label(
+                self.debug_frame,
+                text="Available only when the app is started with --debug",
+                font=("Arial", 9),
+                anchor="w",
+                justify="left",
+            )
+            self.debug_hint_label.pack(fill="x", pady=(8, 0))
+
         # Log output
         self.output_label = tk.Label(
             self.right_frame,
@@ -1361,6 +1420,20 @@ class EdSpanshApp:
         except Exception:
             pass
 
+        if self.debug_mode and hasattr(self, "debug_frame"):
+            self.debug_frame.config(
+                bg=t["panel_bg"], fg=t["label_fg"], bd=2, relief="groove"
+            )
+            self.debug_row.config(bg=t["panel_bg"])
+            self.debug_label.config(bg=t["panel_bg"], fg=t["label_fg"])
+            self.debug_hint_label.config(bg=t["panel_bg"], fg=t["value_fg"])
+
+            self.debug_simulate_btn.config(
+                bg=t["btn_start_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+
     def _update_transport_btn_states(self):
         self.start_btn.config(
             relief="sunken" if self.monitoring_active else "raised"
@@ -1639,6 +1712,141 @@ class EdSpanshApp:
             "The selected ship build could not be found."
         )
 
+    def _calculate_precise_distance(self, coord_a, coord_b):
+        try:
+            ax, ay, az = coord_a
+            bx, by, bz = coord_b
+            dx = float(ax) - float(bx)
+            dy = float(ay) - float(by)
+            dz = float(az) - float(bz)
+            return round(math.sqrt(dx ** 2 + dy ** 2 + dz ** 2), 2)
+        except Exception:
+            return 0.0
+
+    def refresh_debug_waypoint_dropdown(self):
+        if not self.debug_mode or not hasattr(self, "debug_waypoint_dropdown"):
+            return
+
+        self.debug_waypoint_entries = []
+
+        values = []
+        for i, entry in enumerate(self.my_route):
+            if not isinstance(entry, dict):
+                continue
+
+            name = str(entry.get("name", "")).strip()
+            if not name:
+                continue
+
+            label = f"{i + 1} | {name}"
+            values.append(label)
+            self.debug_waypoint_entries.append({
+                "label": label,
+                "index": i,
+                "entry": entry,
+            })
+
+        self.debug_waypoint_dropdown.configure(values=tuple(values))
+
+        if values:
+            self.debug_waypoint_dropdown.current(0)
+        else:
+            self.debug_waypoint_var.set("")
+
+    def get_selected_debug_waypoint_entry(self):
+        if not self.debug_mode or not hasattr(self, "debug_waypoint_dropdown"):
+            return None
+
+        try:
+            selected_index = self.debug_waypoint_dropdown.current()
+        except Exception:
+            return None
+
+        if selected_index is None or selected_index < 0:
+            return None
+
+        if selected_index >= len(self.debug_waypoint_entries):
+            return None
+
+        return self.debug_waypoint_entries[selected_index]
+
+    def simulate_selected_jump(self):
+        if not self.my_route:
+            if not self.read_route_file():
+                messagebox.showwarning(
+                    "No Route Loaded",
+                    "Please load a valid route first."
+                )
+                return
+
+        selected_item = self.get_selected_debug_waypoint_entry()
+        if not selected_item:
+            messagebox.showwarning(
+                "No Waypoint Selected",
+                "Please select a waypoint to simulate."
+            )
+            return
+
+        route_entry = selected_item.get("entry", {})
+        route_index = int(selected_item.get("index", 0))
+
+        system_name = str(route_entry.get("name", "")).strip()
+        x = route_entry.get("x")
+        y = route_entry.get("y")
+        z = route_entry.get("z")
+
+        if x is None or y is None or z is None:
+            messagebox.showerror(
+                "Missing Coordinates",
+                "The selected waypoint has no valid coordinates."
+            )
+            return
+
+        target_coords = (x, y, z)
+
+        jump_distance = 0.0
+
+        if (
+            self.current_system_coords
+            and isinstance(self.current_system_coords, (list, tuple))
+            and len(self.current_system_coords) == 3
+        ):
+            jump_distance = self._calculate_precise_distance(
+                self.current_system_coords,
+                target_coords,
+            )
+        elif route_index > 0:
+            previous_entry = self.get_route_entry_by_index(route_index - 1)
+            if previous_entry:
+                previous_coords = (
+                    previous_entry.get("x", 0.0),
+                    previous_entry.get("y", 0.0),
+                    previous_entry.get("z", 0.0),
+                )
+                jump_distance = self._calculate_precise_distance(
+                    previous_coords,
+                    target_coords,
+                )
+
+        event_data = {
+            "event": "FSDJump",
+            "StarSystem": system_name,
+            "StarPos": [x, y, z],
+            "JumpDist": jump_distance,
+        }
+
+        self.log(
+            f"[DEBUG] Simulating jump to waypoint {route_index + 1}: "
+            f"{system_name} ({jump_distance:.2f} LY)"
+        )
+
+        was_paused = self.is_paused
+        self.is_paused = False
+        try:
+            self.jump_detected(event_data, False)
+        finally:
+            self.is_paused = was_paused
+
     # ------------------------------------------------------------------
     # Route parsing
     # ------------------------------------------------------------------
@@ -1857,6 +2065,7 @@ class EdSpanshApp:
 
             route_rows = self.build_route_table_data(route_type, raw_jumps)
             self.populate_route_table(route_rows, route_type=route_type)
+            self.refresh_debug_waypoint_dropdown()
 
         except Exception as e:
             messagebox.showerror(
