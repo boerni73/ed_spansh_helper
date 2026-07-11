@@ -17,6 +17,7 @@ import locale
 import hashlib
 import shutil
 import math
+import copy
 import webbrowser
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, ttk
@@ -42,6 +43,15 @@ if DEBUG_MODE:
 # Default configuration
 # ----------------------------------------------------------------------
 SETTINGS_FILE = os.path.join(os.path.expanduser("~"), "ed_spansh_settings.json")
+
+JOURNAL_PROGRESS_FILE = os.path.join(
+    os.path.expanduser("~"), "ed_journal_progress.json"
+)
+
+# On startup, replay the last processed journal plus this many older journals.
+# This makes progress reconstruction more robust if the helper app was not
+# running continuously or was not closed cleanly.
+JOURNAL_PROGRESS_REPLAY_TAIL_COUNT = 1
 
 DEFAULT_JOURNAL_DIR = os.path.expanduser(
     r"~\Saved Games\Frontier Developments\Elite Dangerous"
@@ -165,6 +175,9 @@ class EdSpanshApp:
         self.root = root
         self.debug_mode = DEBUG_MODE
         self.debug_waypoint_entries = []
+        self.debug_body_entries = []
+        self.debug_species_entries = []
+        self.debug_simulated_progress_index = None
         self.debug_auto_simulation_active = False
         self.debug_auto_simulation_after_id = None
         self.debug_auto_simulation_delay_ms = 800
@@ -173,8 +186,8 @@ class EdSpanshApp:
         self.root.title(
             f"Elite Dangerous - Spansh VR Navigator v{__version__}{debug_suffix}"
         )
-        self.root.geometry("1500x1080" if self.debug_mode else "1500x950")
-        self.root.minsize(1200, 1230 if self.debug_mode else 1100)
+        self.root.geometry("1500x1220" if self.debug_mode else "1500x950")
+        self.root.minsize(1200, 1370 if self.debug_mode else 1100)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.my_route = []
@@ -190,6 +203,8 @@ class EdSpanshApp:
         self.last_next_waypoint_name = ""
         self.last_next_waypoint_coords = None
         self.route_context_row_data = None
+        self.progress_index = self.make_empty_journal_progress_index()
+        self.progress_index_dirty = False
 
         (
             self.current_theme_name,
@@ -205,6 +220,7 @@ class EdSpanshApp:
         self.ship_builds = []
 
         self.create_widgets()
+        self.progress_index = self.load_journal_progress_index()
         self.setup_table_style()
         self.setup_combobox_style()
         self.apply_theme(self.current_theme_name)
@@ -213,9 +229,13 @@ class EdSpanshApp:
         self.root.after(300, self.check_vr_setup_on_startup)
 
     def on_close(self):
+        if self.debug_mode and self.debug_auto_simulation_active:
+            self.stop_auto_simulate_route(log_message=False)
+
         self.stop_requested = True
         self.monitoring_active = False
         self.save_settings()
+        self.save_journal_progress_index()
         self.root.destroy()
 
     def load_last_route_on_startup(self):
@@ -880,11 +900,11 @@ class EdSpanshApp:
 
         self.dashboard_photo = None
 
-        # Debug: simulate jump
+        # Debug: simulate jump / scan / mapping / exobiology
         if self.debug_mode:
             self.debug_frame = tk.LabelFrame(
                 self.left_frame,
-                text=" Debug / Simulate Jump ",
+                text=" Debug / Simulation ",
                 font=("Arial", 10, "bold"),
                 padx=10, pady=10,
             )
@@ -937,6 +957,86 @@ class EdSpanshApp:
             )
             self.debug_auto_btn.pack(side="left")
 
+            self.debug_row_body = tk.Frame(self.debug_frame)
+            self.debug_row_body.pack(fill="x", pady=(10, 0))
+
+            self.debug_body_label = tk.Label(
+                self.debug_row_body,
+                text="Body:",
+                font=("Arial", 10, "bold"),
+            )
+            self.debug_body_label.pack(side="left", padx=(0, 8))
+
+            self.debug_body_var = tk.StringVar()
+            self.debug_body_dropdown = ttk.Combobox(
+                self.debug_row_body,
+                textvariable=self.debug_body_var,
+                state="readonly",
+                width=42,
+                style="Orange.TCombobox",
+            )
+            self.debug_body_dropdown.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+            self.debug_r2r_scan_btn = tk.Button(
+                self.debug_row_body,
+                text="Simulate FSS Scan",
+                command=self.simulate_r2r_scan_for_selected_body,
+                padx=10,
+            )
+            self.debug_r2r_scan_btn.pack(side="left", padx=(0, 6))
+
+            self.debug_r2r_map_btn = tk.Button(
+                self.debug_row_body,
+                text="Simulate DSS Mapping",
+                command=self.simulate_r2r_mapping_for_selected_body,
+                padx=10,
+            )
+            self.debug_r2r_map_btn.pack(side="left")
+
+            self.debug_row_species = tk.Frame(self.debug_frame)
+            self.debug_row_species.pack(fill="x", pady=(8, 0))
+
+            self.debug_species_label = tk.Label(
+                self.debug_row_species,
+                text="Species:",
+                font=("Arial", 10, "bold"),
+            )
+            self.debug_species_label.pack(side="left", padx=(0, 8))
+
+            self.debug_species_var = tk.StringVar()
+            self.debug_species_dropdown = ttk.Combobox(
+                self.debug_row_species,
+                textvariable=self.debug_species_var,
+                state="readonly",
+                width=42,
+                style="Orange.TCombobox",
+            )
+            self.debug_species_dropdown.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+            self.debug_exo_log_btn = tk.Button(
+                self.debug_row_species,
+                text="Exo Log",
+                command=lambda: self.simulate_exobiology_scan("Log"),
+                padx=10,
+            )
+            self.debug_exo_log_btn.pack(side="left", padx=(0, 6))
+
+            self.debug_exo_sample_btn = tk.Button(
+                self.debug_row_species,
+                text="Exo Sample",
+                command=lambda: self.simulate_exobiology_scan("Sample"),
+                padx=10,
+            )
+            self.debug_exo_sample_btn.pack(side="left", padx=(0, 6))
+
+            self.debug_exo_analyse_btn = tk.Button(
+                self.debug_row_species,
+                text="Exo Analyse",
+                command=lambda: self.simulate_exobiology_scan("Analyse"),
+                padx=10,
+            )
+            self.debug_exo_analyse_btn.pack(side="left")
+
             self.debug_hint_label = tk.Label(
                 self.debug_frame,
                 text="Available only when the app is started with --debug",
@@ -945,6 +1045,22 @@ class EdSpanshApp:
                 justify="left",
             )
             self.debug_hint_label.pack(fill="x", pady=(8, 0))
+
+            self.debug_waypoint_dropdown.bind(
+                "<<ComboboxSelected>>",
+                lambda event: self.refresh_debug_body_dropdown()
+            )
+            self.debug_body_dropdown.bind(
+                "<<ComboboxSelected>>",
+                self.refresh_debug_species_dropdown
+            )
+            self.debug_clear_progress_btn = tk.Button(
+                self.debug_row_bottom,
+                text="Clear Simulated Progress",
+                command=self.clear_debug_simulated_progress,
+                padx=12,
+            )
+            self.debug_clear_progress_btn.pack(side="left", padx=(8, 0))
 
         # Log output
         self.output_label = tk.Label(
@@ -1448,7 +1564,12 @@ class EdSpanshApp:
             )
             self.debug_row_top.config(bg=t["panel_bg"])
             self.debug_row_bottom.config(bg=t["panel_bg"])
+            self.debug_row_body.config(bg=t["panel_bg"])
+            self.debug_row_species.config(bg=t["panel_bg"])
+
             self.debug_label.config(bg=t["panel_bg"], fg=t["label_fg"])
+            self.debug_body_label.config(bg=t["panel_bg"], fg=t["label_fg"])
+            self.debug_species_label.config(bg=t["panel_bg"], fg=t["label_fg"])
             self.debug_hint_label.config(bg=t["panel_bg"], fg=t["value_fg"])
 
             self.debug_simulate_btn.config(
@@ -1464,6 +1585,36 @@ class EdSpanshApp:
             self.debug_auto_btn.config(
                 bg=t["btn_start_bg"], fg=t["btn_fg"],
                 activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_r2r_scan_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_r2r_map_btn.config(
+                bg=t["btn_start_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_exo_log_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_exo_sample_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_exo_analyse_btn.config(
+                bg=t["btn_start_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_clear_progress_btn.config(
+                bg=t["btn_stop_bg"], fg=t["btn_fg"],
+                activebackground="#aa3a00", activeforeground=t["btn_fg"],
                 relief="flat", bd=0,
             )
 
@@ -1905,6 +2056,7 @@ class EdSpanshApp:
 
         if self.debug_mode and hasattr(self, "debug_waypoint_dropdown"):
             self.refresh_debug_waypoint_dropdown()
+            self.refresh_debug_body_dropdown()
 
         return True
 
@@ -2033,6 +2185,369 @@ class EdSpanshApp:
             self._run_auto_simulation_tick,
         )
 
+    def _get_debug_timestamp(self):
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    def _get_debug_system_address(self, route_entry):
+        if not isinstance(route_entry, dict):
+            return 0
+
+        for key in ("system_address", "SystemAddress"):
+            value = route_entry.get(key)
+            if value is not None:
+                try:
+                    return int(value)
+                except Exception:
+                    pass
+
+        system_name = str(route_entry.get("name", "") or "").strip()
+        if not system_name:
+            return 0
+
+        digest = hashlib.md5(system_name.encode("utf-8")).hexdigest()
+        return int(digest[:12], 16)
+
+    def _get_debug_body_id(self, body, fallback_index=0):
+        if isinstance(body, dict):
+            for key in ("body_id", "BodyID", "bodyId", "id"):
+                value = body.get(key)
+                if value is not None:
+                    try:
+                        return int(value)
+                    except Exception:
+                        pass
+
+            body_name = str(body.get("name", "") or "").strip()
+            if body_name:
+                digest = hashlib.md5(body_name.encode("utf-8")).hexdigest()
+                return int(digest[:8], 16)
+
+        return int(fallback_index) + 1
+
+    def _get_debug_genus_from_species_name(self, species_name):
+        text = str(species_name or "").strip()
+        if not text:
+            return ""
+        return text.split()[0]
+
+    def get_debug_target_route_entry(self):
+        if self.current_system_name:
+            current_entry = self.get_route_entry_by_name(self.current_system_name)
+            if current_entry:
+                return current_entry
+
+        selected_item = self.get_selected_debug_waypoint_entry()
+        if selected_item:
+            return selected_item.get("entry")
+
+        next_item = self.get_next_debug_waypoint_entry()
+        if next_item:
+            return next_item.get("entry")
+
+        return None
+
+    def refresh_debug_body_dropdown(self):
+        if not self.debug_mode or not hasattr(self, "debug_body_dropdown"):
+            return
+
+        previous_body_name = ""
+        selected_body = self.get_selected_debug_body_entry()
+        if selected_body:
+            previous_body_name = str(selected_body.get("body_name", "")).strip()
+
+        self.debug_body_entries = []
+
+        route_entry = self.get_debug_target_route_entry()
+        values = []
+
+        if isinstance(route_entry, dict):
+            system_name = str(route_entry.get("name", "") or "").strip()
+            system_address = self._get_debug_system_address(route_entry)
+
+            bodies = route_entry.get("bodies", [])
+            if not isinstance(bodies, list):
+                bodies = []
+
+            for body_index, body in enumerate(bodies):
+                if not isinstance(body, dict):
+                    continue
+
+                body_name = str(body.get("name", "") or "").strip()
+                if not body_name:
+                    continue
+
+                display_name = body_name.replace(f"{system_name} ", "", 1).strip() or body_name
+                label = display_name
+                values.append(label)
+
+                self.debug_body_entries.append({
+                    "label": label,
+                    "body_name": body_name,
+                    "body_id": self._get_debug_body_id(body, body_index),
+                    "system_address": system_address,
+                    "route_entry": route_entry,
+                    "body": body,
+                })
+
+        self.debug_body_dropdown.configure(values=tuple(values))
+
+        if values:
+            selected_index = 0
+            if previous_body_name:
+                for idx, item in enumerate(self.debug_body_entries):
+                    if str(item.get("body_name", "")).strip() == previous_body_name:
+                        selected_index = idx
+                        break
+            self.debug_body_dropdown.current(selected_index)
+        else:
+            self.debug_body_var.set("")
+
+        self.refresh_debug_species_dropdown()
+
+    def get_selected_debug_body_entry(self):
+        if not self.debug_mode or not hasattr(self, "debug_body_dropdown"):
+            return None
+
+        try:
+            selected_index = self.debug_body_dropdown.current()
+        except Exception:
+            return None
+
+        if selected_index is None or selected_index < 0:
+            return None
+
+        if selected_index >= len(self.debug_body_entries):
+            return None
+
+        return self.debug_body_entries[selected_index]
+
+    def refresh_debug_species_dropdown(self, event=None):
+        if not self.debug_mode or not hasattr(self, "debug_species_dropdown"):
+            return
+
+        previous_species_name = ""
+        selected_species = self.get_selected_debug_species_entry()
+        if selected_species:
+            previous_species_name = str(selected_species.get("species_localised", "")).strip()
+
+        self.debug_species_entries = []
+
+        body_entry = self.get_selected_debug_body_entry()
+        values = []
+
+        if body_entry:
+            body = body_entry.get("body", {})
+            landmarks = body.get("landmarks", [])
+            if not isinstance(landmarks, list):
+                landmarks = []
+
+            for landmark in landmarks:
+                if not isinstance(landmark, dict):
+                    continue
+
+                species_localised = str(landmark.get("subtype", "") or "").strip()
+                if not species_localised:
+                    continue
+
+                label = species_localised
+                values.append(label)
+
+                self.debug_species_entries.append({
+                    "label": label,
+                    "species": species_localised,
+                    "species_localised": species_localised,
+                    "genus": self._get_debug_genus_from_species_name(species_localised),
+                    "genus_localised": self._get_debug_genus_from_species_name(species_localised),
+                    "landmark": landmark,
+                })
+
+        self.debug_species_dropdown.configure(values=tuple(values))
+
+        if values:
+            selected_index = 0
+            if previous_species_name:
+                for idx, item in enumerate(self.debug_species_entries):
+                    if str(item.get("species_localised", "")).strip() == previous_species_name:
+                        selected_index = idx
+                        break
+            self.debug_species_dropdown.current(selected_index)
+        else:
+            self.debug_species_var.set("")
+
+    def get_selected_debug_species_entry(self):
+        if not self.debug_mode or not hasattr(self, "debug_species_dropdown"):
+            return None
+
+        try:
+            selected_index = self.debug_species_dropdown.current()
+        except Exception:
+            return None
+
+        if selected_index is None or selected_index < 0:
+            return None
+
+        if selected_index >= len(self.debug_species_entries):
+            return None
+
+        return self.debug_species_entries[selected_index]
+
+    def refresh_current_route_progress_visuals(self):
+        if not self.current_system_name:
+            return
+
+        route_entry = self.get_route_entry_by_name(self.current_system_name)
+        if not route_entry:
+            return
+
+        next_waypoint = self.last_next_waypoint_name
+        if not next_waypoint:
+            next_entry = self.get_route_entry_by_index(self.route_index)
+            if next_entry:
+                next_waypoint = str(next_entry.get("name", "") or "")
+
+        next_waypoint_jumps = self.get_next_waypoint_jumps()
+
+        try:
+            if self.route_type.startswith("Exobiology"):
+                exo_bodies = self.get_exobiology_display_bodies(self.current_system_name)
+                exo_totals = self.get_exobiology_totals(self.current_system_name)
+
+                self.gen_exobiology_image(
+                    current_system=self.current_system_name,
+                    current_system_on_route=True,
+                    next_waypoint=next_waypoint,
+                    bodies=exo_bodies,
+                    totals=exo_totals,
+                    next_waypoint_jumps=next_waypoint_jumps,
+                    waypoints_left=max(0, len(self.my_route) - int(self.route_index)),
+                )
+                self.refresh_dashboard_image()
+
+            elif self.route_type.startswith("Road to Riches"):
+                r2r_bodies = self.get_r2r_display_bodies(self.current_system_name)
+                r2r_totals = self.get_r2r_totals(self.current_system_name)
+
+                self.gen_road_to_riches_image(
+                    current_system=self.current_system_name,
+                    current_system_on_route=True,
+                    next_waypoint=next_waypoint,
+                    bodies=r2r_bodies,
+                    totals=r2r_totals,
+                    value_mode=self.r2r_value_mode,
+                    next_waypoint_jumps=next_waypoint_jumps,
+                )
+                self.refresh_dashboard_image()
+        except Exception as e:
+            self.log(f"Debug visual refresh error: {e}")
+
+    def simulate_progress_event(self, event_data, description):
+        if not self.debug_mode:
+            return
+
+        base_index = self.get_active_progress_index()
+        simulated_index = copy.deepcopy(base_index)
+
+        changed, simulated_index, _ = self.process_journal_entry_for_specific_progress_index(
+            simulated_index,
+            event_data,
+        )
+
+        self.debug_simulated_progress_index = simulated_index
+
+        self.log(f"[DEBUG] {description}")
+
+        if changed:
+            self.refresh_current_route_progress_visuals()
+
+        self.refresh_debug_body_dropdown()
+
+    def simulate_r2r_scan_for_selected_body(self):
+        body_entry = self.get_selected_debug_body_entry()
+        if not body_entry:
+            messagebox.showwarning(
+                "No Body Selected",
+                "Please select a body first."
+            )
+            return
+
+        body = body_entry.get("body", {})
+        event_data = {
+            "timestamp": self._get_debug_timestamp(),
+            "event": "Scan",
+            "ScanType": "Detailed",
+            "BodyName": str(body_entry.get("body_name", "")).strip(),
+            "BodyID": int(body_entry.get("body_id", 0)),
+            "SystemAddress": int(body_entry.get("system_address", 0)),
+            "DistanceFromArrivalLS": float(body.get("distance_to_arrival", 0) or 0),
+            "WasDiscovered": False,
+            "WasMapped": bool(self.is_r2r_body_mapped_by_name(body_entry.get("body_name", ""))),
+        }
+
+        self.simulate_progress_event(
+            event_data,
+            f"Simulated FSS scan for {event_data['BodyName']}",
+        )
+
+    def simulate_r2r_mapping_for_selected_body(self):
+        body_entry = self.get_selected_debug_body_entry()
+        if not body_entry:
+            messagebox.showwarning(
+                "No Body Selected",
+                "Please select a body first."
+            )
+            return
+
+        event_data = {
+            "timestamp": self._get_debug_timestamp(),
+            "event": "SAAMappingComplete",
+            "SystemAddress": int(body_entry.get("system_address", 0)),
+            "BodyName": str(body_entry.get("body_name", "")).strip(),
+            "BodyID": int(body_entry.get("body_id", 0)),
+            "ProbesUsed": 4,
+            "EfficiencyTarget": 6,
+        }
+
+        self.simulate_progress_event(
+            event_data,
+            f"Simulated DSS mapping for {event_data['BodyName']}",
+        )
+
+    def simulate_exobiology_scan(self, scan_type):
+        body_entry = self.get_selected_debug_body_entry()
+        if not body_entry:
+            messagebox.showwarning(
+                "No Body Selected",
+                "Please select a body first."
+            )
+            return
+
+        species_entry = self.get_selected_debug_species_entry()
+        if not species_entry:
+            messagebox.showwarning(
+                "No Species Selected",
+                "Please select a species first."
+            )
+            return
+
+        event_data = {
+            "timestamp": self._get_debug_timestamp(),
+            "event": "ScanOrganic",
+            "ScanType": str(scan_type),
+            "Species": str(species_entry.get("species", "")).strip(),
+            "Species_Localised": str(species_entry.get("species_localised", "")).strip(),
+            "Genus": str(species_entry.get("genus", "")).strip(),
+            "Genus_Localised": str(species_entry.get("genus_localised", "")).strip(),
+            "SystemAddress": int(body_entry.get("system_address", 0)),
+            "Body": int(body_entry.get("body_id", 0)),
+            "BodyName": str(body_entry.get("body_name", "")).strip(),
+        }
+
+        self.simulate_progress_event(
+            event_data,
+            f"Simulated exobiology {scan_type} for "
+            f"{event_data['Species_Localised']} on {body_entry.get('body_name', '')}",
+        )
+
     # ------------------------------------------------------------------
     # Route parsing
     # ------------------------------------------------------------------
@@ -2129,8 +2644,8 @@ class EdSpanshApp:
         return int(route_entry.get("jumps", 0) or 0)
 
     def detect_systems_route_type(self, raw_systems):
-        has_r2r_markers = False
-        has_exo_markers = False
+        found_exobiology = False
+        found_r2r = False
 
         for system in raw_systems:
             if not isinstance(system, dict):
@@ -2144,23 +2659,39 @@ class EdSpanshApp:
                 if not isinstance(body, dict):
                     continue
 
-                # Road to Riches marker
-                if (
-                    body.get("estimated_scan_value") is not None
-                    or body.get("estimated_mapping_value") is not None
-                ):
-                    has_r2r_markers = True
-
-                # Exobiology marker
+                landmark_value = int(body.get("landmark_value", 0) or 0)
                 landmarks = body.get("landmarks", [])
-                if isinstance(landmarks, list) and len(landmarks) > 0:
-                    has_exo_markers = True
 
-        # Prefer R2R if scan/mapping values are present
-        if has_r2r_markers:
+                has_landmarks = (
+                    isinstance(landmarks, list)
+                    and any(isinstance(lm, dict) for lm in landmarks)
+                )
+
+                # Exobiology indicators
+                if landmark_value > 0 or has_landmarks:
+                    found_exobiology = True
+
+                if any(key in body for key in (
+                    "genuses",
+                    "species",
+                    "bio_signals",
+                    "signals",
+                )):
+                    found_exobiology = True
+
+                # Road to Riches indicators
+                estimated_scan_value = int(body.get("estimated_scan_value", 0) or 0)
+                estimated_mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
+
+                if estimated_scan_value > 0 or estimated_mapping_value > 0:
+                    found_r2r = True
+
+            # Exobiology should win immediately if detected anywhere
+            if found_exobiology:
+                return "Exobiology"
+
+        if found_r2r:
             return "Road to Riches"
-        if has_exo_markers:
-            return "Exobiology"
 
         return "Road to Riches"
 
@@ -2266,6 +2797,7 @@ class EdSpanshApp:
             route_rows = self.build_route_table_data(route_type, raw_jumps)
             self.populate_route_table(route_rows, route_type=route_type)
             self.refresh_debug_waypoint_dropdown()
+            self.refresh_debug_body_dropdown()
 
         except Exception as e:
             messagebox.showerror(
@@ -3204,6 +3736,707 @@ class EdSpanshApp:
         }.get(mode, "#808080")
 
     # ------------------------------------------------------------------
+    # Journal progress index
+    # ------------------------------------------------------------------
+    def get_active_progress_index(self):
+        if self.debug_mode and self.debug_simulated_progress_index is not None:
+            return self.debug_simulated_progress_index
+        return self.progress_index
+
+    def process_journal_entry_for_specific_progress_index(self, target_index, log_entry):
+        original_index = self.progress_index
+        original_dirty = self.progress_index_dirty
+
+        try:
+            self.progress_index = target_index
+            self.progress_index_dirty = False
+            changed = self.process_journal_entry_for_progress(log_entry)
+            updated_index = self.progress_index
+            updated_dirty = self.progress_index_dirty
+        finally:
+            self.progress_index = original_index
+            self.progress_index_dirty = original_dirty
+
+        return changed, updated_index, updated_dirty
+
+    def clear_debug_simulated_progress(self):
+        self.debug_simulated_progress_index = None
+        self.log("[DEBUG] Cleared simulated progress overlay.")
+        self.refresh_current_route_progress_visuals()
+        self.refresh_debug_body_dropdown()
+
+    def make_empty_journal_progress_index(self):
+        return {
+            "version": 1,
+            "meta": {
+                "last_processed_journal": "",
+            },
+            "processed_files": {},
+            "body_registry": {},
+            "exobiology": {
+                "species_status": {},
+            },
+            "road_to_riches": {
+                "body_status": {},
+            },
+        }
+
+    def ensure_journal_progress_index_structure(self, data):
+        if not isinstance(data, dict):
+            data = self.make_empty_journal_progress_index()
+
+        data.setdefault("version", 1)
+        data.setdefault("meta", {})
+        data["meta"].setdefault("last_processed_journal", "")
+        data.setdefault("processed_files", {})
+        data.setdefault("body_registry", {})
+
+        data.setdefault("exobiology", {})
+        data["exobiology"].setdefault("species_status", {})
+
+        data.setdefault("road_to_riches", {})
+        data["road_to_riches"].setdefault("body_status", {})
+
+        return data
+
+    def normalize_body_name(self, body_name):
+        return str(body_name or "").strip().lower()
+
+    def make_body_registry_key(self, system_address, body_id):
+        return f"{system_address}|{body_id}"
+
+    def update_body_registry(self, system_address, body_id, body_name, timestamp=""):
+        if system_address is None or body_id is None:
+            return False
+
+        body_name = str(body_name or "").strip()
+        if not body_name:
+            return False
+
+        key = self.make_body_registry_key(system_address, body_id)
+        body_registry = self.progress_index["body_registry"]
+
+        existing = body_registry.get(key, {})
+        updated = False
+
+        if not existing:
+            body_registry[key] = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "normalized_body_name": self.normalize_body_name(body_name),
+                "last_timestamp": str(timestamp or "").strip(),
+            }
+            updated = True
+        else:
+            if existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                existing["normalized_body_name"] = self.normalize_body_name(body_name)
+                updated = True
+
+            timestamp = str(timestamp or "").strip()
+            if timestamp and existing.get("last_timestamp") != timestamp:
+                existing["last_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated
+
+    def get_registered_body_name(self, system_address, body_id, default=""):
+        key = self.make_body_registry_key(system_address, body_id)
+        progress_index = self.get_active_progress_index()
+        entry = progress_index.get("body_registry", {}).get(key, {})
+        return str(entry.get("body_name", default) or default)
+
+    def get_registered_body_entry(self, system_address, body_id):
+        key = self.make_body_registry_key(system_address, body_id)
+        progress_index = self.get_active_progress_index()
+        return progress_index.get("body_registry", {}).get(key)
+
+    def get_exobiology_species_progress(self, system_address, body, species):
+        key = f"{system_address}|{body}|{species}"
+        progress_index = self.get_active_progress_index()
+        return progress_index.get("exobiology", {}).get("species_status", {}).get(key)
+
+    def get_exobiology_body_progress(self, system_address, body):
+        prefix = f"{system_address}|{body}|"
+        progress_index = self.get_active_progress_index()
+        species_status = progress_index.get("exobiology", {}).get("species_status", {})
+
+        entries = [
+            value for key, value in species_status.items()
+            if str(key).startswith(prefix)
+        ]
+
+        entries.sort(
+            key=lambda item: (
+                -self.get_exobiology_status_rank(item.get("status")),
+                str(item.get("species_localised", "") or item.get("species", "")),
+            )
+        )
+        return entries
+
+    def is_exobiology_species_completed(self, system_address, body, species):
+        entry = self.get_exobiology_species_progress(system_address, body, species)
+        if not entry:
+            return False
+        return str(entry.get("status", "")).strip() == "Analyse"
+
+    def get_r2r_body_progress_by_id(self, system_address, body_id):
+        key = f"{system_address}|{body_id}"
+        progress_index = self.get_active_progress_index()
+        return progress_index.get("road_to_riches", {}).get("body_status", {}).get(key)
+
+    def get_r2r_body_progress_by_name(self, body_name):
+        normalized_name = self.normalize_body_name(body_name)
+        if not normalized_name:
+            return None
+
+        progress_index = self.get_active_progress_index()
+        body_status = progress_index.get("road_to_riches", {}).get("body_status", {})
+
+        for entry in body_status.values():
+            if self.normalize_body_name(entry.get("body_name", "")) == normalized_name:
+                return entry
+
+        return None
+
+    def get_r2r_body_progress_state_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return "open"
+
+        if bool(entry.get("mapped", False)):
+            return "mapped"
+
+        if bool(entry.get("fss_scanned", False)):
+            return "scanned"
+
+        return "open"
+
+    def get_r2r_body_progress_rank_by_name(self, body_name):
+        state = self.get_r2r_body_progress_state_by_name(body_name)
+        return {
+            "open": 0,
+            "scanned": 0,
+            "mapped": 1,
+        }.get(str(state or "open"), 0)
+
+    def get_r2r_body_remaining_value(self, body):
+        if not isinstance(body, dict):
+            return 0
+
+        body_name = str(body.get("name", "") or "").strip()
+        if not body_name:
+            return 0
+
+        body_state = self.get_r2r_body_progress_state_by_name(body_name)
+
+        remaining_value = 0
+
+        if body_state == "open":
+            remaining_value += int(body.get("estimated_scan_value", 0) or 0)
+            remaining_value += int(body.get("estimated_mapping_value", 0) or 0)
+
+        elif body_state == "scanned":
+            remaining_value += int(body.get("estimated_mapping_value", 0) or 0)
+
+        return remaining_value
+
+    def _dim_color(self, color, factor=0.45):
+        try:
+            r, g, b = color
+            return (
+                int(r * factor),
+                int(g * factor),
+                int(b * factor),
+            )
+        except Exception:
+            return color
+
+    def is_r2r_body_scanned_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return False
+        return bool(entry.get("fss_scanned", False))
+
+    def is_r2r_body_mapped_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return False
+        return bool(entry.get("mapped", False))
+
+    def normalize_progress_name(self, value):
+        return " ".join(str(value or "").strip().lower().split())
+
+    def get_registered_body_entry_by_name(self, body_name):
+        normalized_name = self.normalize_body_name(body_name)
+        if not normalized_name:
+            return None
+
+        progress_index = self.get_active_progress_index()
+
+        for entry in progress_index.get("body_registry", {}).values():
+            if self.normalize_body_name(entry.get("body_name", "")) == normalized_name:
+                return entry
+
+        return None
+
+    def get_exobiology_species_progress_by_body_name(self, body_name, species_localised):
+        normalized_body_name = self.normalize_body_name(body_name)
+        target_species = self.normalize_progress_name(species_localised)
+
+        if not normalized_body_name or not target_species:
+            return None
+
+        progress_index = self.get_active_progress_index()
+        registry_entry = self.get_registered_body_entry_by_name(body_name)
+        species_status = progress_index.get("exobiology", {}).get("species_status", {})
+
+        if registry_entry:
+            system_address = registry_entry.get("system_address")
+            body_id = registry_entry.get("body_id")
+
+            for entry in species_status.values():
+                if entry.get("system_address") != system_address:
+                    continue
+                if entry.get("body") != body_id:
+                    continue
+
+                species_localised_value = self.normalize_progress_name(
+                    entry.get("species_localised", "")
+                )
+                species_internal_value = self.normalize_progress_name(
+                    entry.get("species", "")
+                )
+
+                if target_species == species_localised_value or target_species == species_internal_value:
+                    return entry
+
+        for entry in species_status.values():
+            entry_body_name = self.normalize_body_name(entry.get("body_name", ""))
+            if entry_body_name != normalized_body_name:
+                continue
+
+            species_localised_value = self.normalize_progress_name(
+                entry.get("species_localised", "")
+            )
+            species_internal_value = self.normalize_progress_name(
+                entry.get("species", "")
+            )
+
+            if target_species == species_localised_value or target_species == species_internal_value:
+                return entry
+
+        return None
+
+    def is_exobiology_species_completed_by_body_name(self, body_name, species_localised):
+        entry = self.get_exobiology_species_progress_by_body_name(
+            body_name,
+            species_localised,
+        )
+        if not entry:
+            return False
+
+        return str(entry.get("status", "")).strip() == "Analyse"
+
+    def get_exobiology_body_progress_state(self, body):
+        if not isinstance(body, dict):
+            return "open"
+
+        body_name = str(body.get("name", "") or "").strip()
+        landmarks = body.get("landmarks", [])
+
+        if not body_name or not isinstance(landmarks, list):
+            return "open"
+
+        valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+        if not valid_landmarks:
+            return "open"
+
+        total_count = 0
+        completed_count = 0
+
+        for landmark in valid_landmarks:
+            subtype = str(landmark.get("subtype", "") or "").strip()
+            if not subtype:
+                continue
+
+            total_count += 1
+
+            if self.is_exobiology_species_completed_by_body_name(body_name, subtype):
+                completed_count += 1
+
+        if total_count == 0:
+            return "open"
+
+        if completed_count >= total_count:
+            return "completed"
+
+        if completed_count > 0:
+            return "partial"
+
+        return "open"
+
+    def get_exobiology_body_progress_rank(self, state):
+        return {
+            "open": 0,
+            "partial": 1,
+            "completed": 2,
+        }.get(str(state or "open"), 0)
+
+    def get_exobiology_body_remaining_value(self, body):
+        if not isinstance(body, dict):
+            return 0
+
+        body_name = str(body.get("name", "") or "").strip()
+        landmarks = body.get("landmarks", [])
+
+        if not body_name or not isinstance(landmarks, list):
+            return 0
+
+        remaining_value = 0
+
+        for landmark in landmarks:
+            if not isinstance(landmark, dict):
+                continue
+
+            landmark_subtype = str(landmark.get("subtype", "") or "").strip()
+            landmark_value = int(landmark.get("value", 0) or 0)
+
+            if not landmark_subtype:
+                continue
+
+            if not self.is_exobiology_species_completed_by_body_name(
+                body_name,
+                landmark_subtype,
+            ):
+                remaining_value += landmark_value
+
+        return remaining_value
+
+    def load_journal_progress_index(self):
+        if not os.path.exists(JOURNAL_PROGRESS_FILE):
+            return self.make_empty_journal_progress_index()
+
+        try:
+            with open(JOURNAL_PROGRESS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return self.ensure_journal_progress_index_structure(data)
+        except Exception as e:
+            self.log(f"Warning: Could not load journal progress index: {e}")
+            return self.make_empty_journal_progress_index()
+
+    def save_journal_progress_index(self):
+        try:
+            data = self.ensure_journal_progress_index_structure(self.progress_index)
+
+            progress_dir = os.path.dirname(JOURNAL_PROGRESS_FILE)
+            if progress_dir:
+                os.makedirs(progress_dir, exist_ok=True)
+
+            with open(JOURNAL_PROGRESS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+            self.progress_index_dirty = False
+        except Exception as e:
+            self.log(f"Warning: Could not save journal progress index: {e}")
+
+    def mark_journal_progress_dirty(self):
+        self.progress_index_dirty = True
+
+    def get_sorted_journal_files(self):
+        journal_files = glob.glob(os.path.join(self.journal_dir, "Journal.*.log"))
+        return sorted(
+            journal_files,
+            key=lambda p: os.path.basename(p).lower(),
+        )
+
+    def update_processed_journal_file(self, file_path):
+        file_name = os.path.basename(file_path)
+
+        try:
+            stat_result = os.stat(file_path)
+            size = int(stat_result.st_size)
+            mtime = float(stat_result.st_mtime)
+        except Exception:
+            size = 0
+            mtime = 0.0
+
+        self.progress_index["processed_files"][file_name] = {
+            "size": size,
+            "mtime": mtime,
+        }
+        self.progress_index["meta"]["last_processed_journal"] = file_name
+        self.mark_journal_progress_dirty()
+
+    def sync_journal_progress_from_existing_logs(self):
+        journal_files = self.get_sorted_journal_files()
+        if not journal_files:
+            return
+
+        last_processed_journal = str(
+            self.progress_index.get("meta", {}).get("last_processed_journal", "")
+        ).strip()
+
+        start_index = 0
+
+        if last_processed_journal:
+            journal_names = [os.path.basename(path) for path in journal_files]
+            if last_processed_journal in journal_names:
+                last_index = journal_names.index(last_processed_journal)
+                start_index = max(0, last_index - JOURNAL_PROGRESS_REPLAY_TAIL_COUNT)
+
+        files_to_scan = journal_files[start_index:]
+
+        self.thread_safe_log(
+            f"Journal progress sync: scanning {len(files_to_scan)} journal file(s) "
+            f"starting from index {start_index + 1}."
+        )
+
+        for file_path in files_to_scan:
+            self.process_journal_file_for_progress(file_path)
+
+        if self.progress_index_dirty:
+            self.save_journal_progress_index()
+
+    def process_journal_entry_for_progress(self, log_entry):
+        if not isinstance(log_entry, dict):
+            return False
+
+        event_name = str(log_entry.get("event", "")).strip()
+
+        if event_name == "ScanOrganic":
+            return self.process_exobiology_event(log_entry)
+
+        if event_name == "Scan" and str(log_entry.get("ScanType", "")).strip() == "Detailed":
+            return self.process_r2r_scan_event(log_entry)
+
+        if event_name == "SAAMappingComplete":
+            return self.process_r2r_mapping_event(log_entry)
+
+        return False
+
+    def get_exobiology_status_rank(self, status):
+        return {
+            "Log": 1,
+            "Sample": 2,
+            "Analyse": 3,
+        }.get(str(status or ""), 0)
+
+    def process_exobiology_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body = log_entry.get("Body")
+        species = str(log_entry.get("Species", "")).strip()
+        scan_type = str(log_entry.get("ScanType", "")).strip()
+        body_name_from_event = str(log_entry.get("BodyName", "")).strip()
+        timestamp = str(log_entry.get("timestamp", "")).strip()
+
+        if system_address is None or body is None or not species or not scan_type:
+            return False
+
+        registry_updated = False
+        if body_name_from_event:
+            registry_updated = self.update_body_registry(
+                system_address=system_address,
+                body_id=body,
+                body_name=body_name_from_event,
+                timestamp=timestamp,
+            )
+
+        body_name = body_name_from_event or self.get_registered_body_name(
+            system_address,
+            body,
+            default="",
+        )
+
+        key = f"{system_address}|{body}|{species}"
+        species_status = self.progress_index["exobiology"]["species_status"]
+
+        existing = species_status.get(key, {})
+        old_rank = self.get_exobiology_status_rank(existing.get("status"))
+        new_rank = self.get_exobiology_status_rank(scan_type)
+
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body": body,
+                "body_name": body_name,
+                "species": species,
+                "species_localised": str(log_entry.get("Species_Localised", "")).strip(),
+                "genus": str(log_entry.get("Genus", "")).strip(),
+                "genus_localised": str(log_entry.get("Genus_Localised", "")).strip(),
+                "status": scan_type,
+                "last_timestamp": timestamp,
+            }
+            species_status[key] = existing
+            updated = True
+        else:
+            if new_rank > old_rank:
+                existing["status"] = scan_type
+                updated = True
+
+            species_localised = str(log_entry.get("Species_Localised", "")).strip()
+            genus = str(log_entry.get("Genus", "")).strip()
+            genus_localised = str(log_entry.get("Genus_Localised", "")).strip()
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if species_localised and existing.get("species_localised") != species_localised:
+                existing["species_localised"] = species_localised
+                updated = True
+
+            if genus and existing.get("genus") != genus:
+                existing["genus"] = genus
+                updated = True
+
+            if genus_localised and existing.get("genus_localised") != genus_localised:
+                existing["genus_localised"] = genus_localised
+                updated = True
+
+            if timestamp and existing.get("last_timestamp") != timestamp:
+                existing["last_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated or registry_updated
+
+    def process_r2r_scan_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body_id = log_entry.get("BodyID")
+        body_name = str(log_entry.get("BodyName", "")).strip()
+        timestamp = str(log_entry.get("timestamp", "")).strip()
+
+        if system_address is None or body_id is None or not body_name:
+            return False
+
+        registry_updated = self.update_body_registry(
+            system_address=system_address,
+            body_id=body_id,
+            body_name=body_name,
+            timestamp=timestamp,
+        )
+
+        key = f"{system_address}|{body_id}"
+        body_status = self.progress_index["road_to_riches"]["body_status"]
+
+        existing = body_status.get(key, {})
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "fss_scanned": True,
+                "mapped": bool(log_entry.get("WasMapped", False)),
+                "last_scan_timestamp": timestamp,
+                "last_mapping_timestamp": "",
+            }
+            body_status[key] = existing
+            updated = True
+        else:
+            if not existing.get("fss_scanned", False):
+                existing["fss_scanned"] = True
+                updated = True
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if timestamp and existing.get("last_scan_timestamp") != timestamp:
+                existing["last_scan_timestamp"] = timestamp
+                updated = True
+
+            if bool(log_entry.get("WasMapped", False)) and not existing.get("mapped", False):
+                existing["mapped"] = True
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated or registry_updated
+
+    def process_r2r_mapping_event(self, log_entry):
+        system_address = log_entry.get("SystemAddress")
+        body_id = log_entry.get("BodyID")
+        body_name = str(log_entry.get("BodyName", "")).strip()
+        timestamp = str(log_entry.get("timestamp", "")).strip()
+
+        if system_address is None or body_id is None or not body_name:
+            return False
+
+        registry_updated = self.update_body_registry(
+            system_address=system_address,
+            body_id=body_id,
+            body_name=body_name,
+            timestamp=timestamp,
+        )
+
+        key = f"{system_address}|{body_id}"
+        body_status = self.progress_index["road_to_riches"]["body_status"]
+
+        existing = body_status.get(key, {})
+        updated = False
+
+        if not existing:
+            existing = {
+                "system_address": system_address,
+                "body_id": body_id,
+                "body_name": body_name,
+                "fss_scanned": False,
+                "mapped": True,
+                "last_scan_timestamp": "",
+                "last_mapping_timestamp": timestamp,
+            }
+            body_status[key] = existing
+            updated = True
+        else:
+            if not existing.get("mapped", False):
+                existing["mapped"] = True
+                updated = True
+
+            if body_name and existing.get("body_name") != body_name:
+                existing["body_name"] = body_name
+                updated = True
+
+            if timestamp and existing.get("last_mapping_timestamp") != timestamp:
+                existing["last_mapping_timestamp"] = timestamp
+                updated = True
+
+        if updated:
+            self.mark_journal_progress_dirty()
+
+        return updated or registry_updated
+
+    def process_journal_file_for_progress(self, file_path):
+        file_name = os.path.basename(file_path)
+        self.thread_safe_log(f"Progress scan: {file_name}")
+
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    try:
+                        log_entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    self.process_journal_entry_for_progress(log_entry)
+
+            self.update_processed_journal_file(file_path)
+
+        except Exception as e:
+            self.thread_safe_log(f"Progress scan error in {file_name}: {e}")
+
+    # ------------------------------------------------------------------
     # Route logic
     # ------------------------------------------------------------------
     def get_route_entry_by_name(self, system_name):
@@ -3246,26 +4479,17 @@ class EdSpanshApp:
 
         valid_bodies = [body for body in bodies if isinstance(body, dict)]
 
-        if self.r2r_value_mode == "scan":
-            sorted_bodies = sorted(
-                valid_bodies,
-                key=lambda body: (
-                    int(body.get("estimated_scan_value", 0) or 0),
-                    int(body.get("estimated_mapping_value", 0) or 0),
-                    -(float(body.get("distance_to_arrival", 0) or 0)),
+        sorted_bodies = sorted(
+            valid_bodies,
+            key=lambda body: (
+                self.get_r2r_body_progress_rank_by_name(
+                    str(body.get("name", "") or "").strip()
                 ),
-                reverse=True,
-            )
-        else:
-            sorted_bodies = sorted(
-                valid_bodies,
-                key=lambda body: (
-                    int(body.get("estimated_mapping_value", 0) or 0),
-                    int(body.get("estimated_scan_value", 0) or 0),
-                    -(float(body.get("distance_to_arrival", 0) or 0)),
-                ),
-                reverse=True,
-            )
+                -self.get_r2r_body_remaining_value(body),
+                float(body.get("distance_to_arrival", 0) or 0),
+                str(body.get("name", "") or ""),
+            ),
+        )
 
         if max_rows is None:
             return sorted_bodies
@@ -3277,6 +4501,7 @@ class EdSpanshApp:
         if not route_entry:
             return {
                 "count": 0,
+                "remaining_count": 0,
                 "scan_total": 0,
                 "mapping_total": 0,
             }
@@ -3287,16 +4512,31 @@ class EdSpanshApp:
 
         valid_bodies = [body for body in bodies if isinstance(body, dict)]
 
+        scan_total = 0
+        mapping_total = 0
+        remaining_count = 0
+
+        for body in valid_bodies:
+            body_name = str(body.get("name", "") or "").strip()
+            body_state = self.get_r2r_body_progress_state_by_name(body_name)
+
+            scan_pending = body_state == "open"
+            mapping_pending = body_state in ("open", "scanned")
+
+            if scan_pending:
+                scan_total += int(body.get("estimated_scan_value", 0) or 0)
+
+            if mapping_pending:
+                mapping_total += int(body.get("estimated_mapping_value", 0) or 0)
+
+            if scan_pending or mapping_pending:
+                remaining_count += 1
+
         return {
             "count": len(valid_bodies),
-            "scan_total": sum(
-                int(body.get("estimated_scan_value", 0) or 0)
-                for body in valid_bodies
-            ),
-            "mapping_total": sum(
-                int(body.get("estimated_mapping_value", 0) or 0)
-                for body in valid_bodies
-            ),
+            "remaining_count": remaining_count,
+            "scan_total": scan_total,
+            "mapping_total": mapping_total,
         }
 
     def _get_primary_landmark_subtype(self, body):
@@ -3338,7 +4578,10 @@ class EdSpanshApp:
         sorted_bodies = sorted(
             valid_bodies,
             key=lambda body: (
-                -int(body.get("landmark_value", 0) or 0),
+                self.get_exobiology_body_progress_rank(
+                    self.get_exobiology_body_progress_state(body)
+                ),
+                -self.get_exobiology_body_remaining_value(body),
                 float(body.get("distance_to_arrival", 0) or 0),
                 str(body.get("name", "") or ""),
             ),
@@ -3352,6 +4595,7 @@ class EdSpanshApp:
             body_subtype = str(body.get("subtype", "") or "")
             body_color = self._get_body_subtype_color(body_subtype)
             distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
+            body_progress_state = self.get_exobiology_body_progress_state(body)
 
             landmarks = body.get("landmarks", [])
             if not isinstance(landmarks, list):
@@ -3362,8 +4606,11 @@ class EdSpanshApp:
             valid_landmarks = sorted(
                 valid_landmarks,
                 key=lambda lm: (
+                    self.is_exobiology_species_completed_by_body_name(
+                        body_name,
+                        str(lm.get("subtype", "") or "").strip(),
+                    ),
                     -int(lm.get("value", 0) or 0),
-                    -int(lm.get("count", 0) or 0),
                     str(lm.get("subtype", "") or ""),
                 ),
             )
@@ -3375,6 +4622,8 @@ class EdSpanshApp:
                     "distance_ls": distance_ls,
                     "landmark_value": int(body.get("landmark_value", 0) or 0),
                     "landmark_subtype": "-",
+                    "body_progress_state": body_progress_state,
+                    "landmark_completed": False,
                 })
                 continue
 
@@ -3383,15 +4632,23 @@ class EdSpanshApp:
                 landmark_count = int(landmark.get("count", 0) or 0)
                 landmark_value = int(landmark.get("value", 0) or 0)
 
+                landmark_completed = self.is_exobiology_species_completed_by_body_name(
+                    body_name,
+                    landmark_subtype,
+                )
+
+                display_subtype = landmark_subtype
                 if landmark_count > 1:
-                    landmark_subtype = f"{landmark_subtype} x{landmark_count}"
+                    display_subtype = f"{landmark_subtype} x{landmark_count}"
 
                 display_rows.append({
                     "display_body_name": display_body_name if idx == 0 else "",
                     "body_color": body_color,
                     "distance_ls": distance_ls if idx == 0 else None,
                     "landmark_value": landmark_value,
-                    "landmark_subtype": landmark_subtype,
+                    "landmark_subtype": display_subtype,
+                    "body_progress_state": body_progress_state,
+                    "landmark_completed": landmark_completed,
                 })
 
         if max_rows is None:
@@ -3404,6 +4661,7 @@ class EdSpanshApp:
         if not route_entry:
             return {
                 "count": 0,
+                "remaining_count": 0,
                 "landmark_total": 0,
             }
 
@@ -3419,25 +4677,46 @@ class EdSpanshApp:
             )
         ]
 
+        remaining_count = 0
         landmark_total = 0
 
         for body in valid_bodies:
+            body_name = str(body.get("name", "") or "").strip()
             landmarks = body.get("landmarks", [])
-            if isinstance(landmarks, list):
-                valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
-            else:
-                valid_landmarks = []
+
+            if not isinstance(landmarks, list):
+                landmarks = []
+
+            valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+
+            body_has_remaining = False
 
             if valid_landmarks:
-                landmark_total += sum(
-                    int(lm.get("value", 0) or 0)
-                    for lm in valid_landmarks
-                )
+                for landmark in valid_landmarks:
+                    landmark_subtype = str(landmark.get("subtype", "") or "").strip()
+                    landmark_value = int(landmark.get("value", 0) or 0)
+
+                    if not landmark_subtype:
+                        continue
+
+                    if not self.is_exobiology_species_completed_by_body_name(
+                        body_name,
+                        landmark_subtype,
+                    ):
+                        landmark_total += landmark_value
+                        body_has_remaining = True
             else:
-                landmark_total += int(body.get("landmark_value", 0) or 0)
+                fallback_value = int(body.get("landmark_value", 0) or 0)
+                if fallback_value > 0:
+                    landmark_total += fallback_value
+                    body_has_remaining = True
+
+            if body_has_remaining:
+                remaining_count += 1
 
         return {
             "count": len(valid_bodies),
+            "remaining_count": remaining_count,
             "landmark_total": landmark_total,
         }
 
@@ -4244,7 +5523,17 @@ class EdSpanshApp:
             scan_value = int(body.get("estimated_scan_value", 0) or 0)
             mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
 
-            body_color = self._get_body_subtype_color(subtype)
+            body_base_color = self._get_body_subtype_color(subtype)
+            body_state = self.get_r2r_body_progress_state_by_name(body_name)
+
+            body_done = body_state == "mapped"
+            scan_done = body_state in ("scanned", "mapped")
+            mapping_done = body_state == "mapped"
+
+            body_color = self._dim_color(body_base_color) if body_done else body_base_color
+            dist_color = colors["table_text"]
+            scan_color = self._dim_color(colors["table_text"]) if scan_done else colors["table_text"]
+            mapping_color = self._dim_color(colors["ed_orange"]) if mapping_done else colors["ed_orange"]
 
             draw.text(
                 (positions["body_x"], row_y),
@@ -4263,13 +5552,13 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["scan_x"] - scan_width, row_y),
                     scan_text,
-                    fill=colors["ed_orange"],
+                    fill=scan_color,
                     font=fonts["table_row"]
                 )
 
@@ -4280,13 +5569,13 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["map_x"] - map_width, row_y),
                     map_text,
-                    fill=colors["ed_orange"],
+                    fill=mapping_color,
                     font=fonts["table_row"]
                 )
 
@@ -4299,23 +5588,23 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["scan_x"] - scan_width, row_y),
                     scan_text,
-                    fill=colors["table_text"],
+                    fill=scan_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["map_x"] - map_width, row_y),
                     map_text,
-                    fill=colors["ed_orange"],
+                    fill=mapping_color,
                     font=fonts["table_row"]
                 )
 
-        body_count = int(totals.get("count", 0) or 0)
+        body_count = int(totals.get("remaining_count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
         mapping_total = int(totals.get("mapping_total", 0) or 0)
 
@@ -4395,10 +5684,25 @@ class EdSpanshApp:
             row_y = self._get_table_row_y(table_top, i)
 
             display_body_name = str(body.get("display_body_name", "") or "")
-            body_color = body.get("body_color", colors["table_text"])
+            body_base_color = body.get("body_color", colors["table_text"])
             distance_ls = body.get("distance_ls")
             landmark_value = body.get("landmark_value")
             landmark_subtype = str(body.get("landmark_subtype", "-") or "-")
+            body_progress_state = str(body.get("body_progress_state", "open") or "open")
+            landmark_completed = bool(body.get("landmark_completed", False))
+
+            body_done = body_progress_state == "completed"
+
+            body_color = self._dim_color(body_base_color) if body_done else body_base_color
+            dist_color = self._dim_color(colors["table_text"]) if body_done else colors["table_text"]
+            value_color = (
+                self._dim_color(colors["ed_orange"])
+                if landmark_completed else colors["ed_orange"]
+            )
+            subtype_color = (
+                self._dim_color(colors["table_text"])
+                if landmark_completed else colors["table_text"]
+            )
 
             if display_body_name:
                 body_font = self._fit_font(
@@ -4422,7 +5726,7 @@ class EdSpanshApp:
                 draw.text(
                     (self.EXO_COL_DIST_X - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
 
@@ -4432,7 +5736,7 @@ class EdSpanshApp:
                 draw.text(
                     (self.EXO_COL_VALUE_X - value_width, row_y),
                     value_text,
-                    fill=colors["ed_orange"],
+                    fill=value_color,
                     font=fonts["table_row"]
                 )
 
@@ -4448,11 +5752,11 @@ class EdSpanshApp:
             draw.text(
                 (self.EXO_COL_SUBTYPE_X, row_y + 4),
                 landmark_subtype,
-                fill=colors["table_text"],
+                fill=subtype_color,
                 font=subtype_font
             )
 
-        body_count = int(totals.get("count", 0) or 0)
+        body_count = int(totals.get("remaining_count", 0) or 0)
         landmark_total = int(totals.get("landmark_total", 0) or 0)
 
         summary_config = self._get_exobiology_summary_config(
@@ -4797,6 +6101,9 @@ class EdSpanshApp:
 
             self.refresh_dashboard_image()
 
+            if self.debug_mode:
+                self.refresh_debug_body_dropdown()
+
         except Exception as e:
             self.log(f"Image generation error: {e}")
 
@@ -4840,6 +6147,7 @@ class EdSpanshApp:
             self.ui_call(self.stop_monitoring)
             return
 
+        self.sync_journal_progress_from_existing_logs()
         start_event = self.find_current_system_on_startup(current_journal)
         if start_event:
             self.ui_call(self.jump_detected, start_event, True)
@@ -4872,6 +6180,7 @@ class EdSpanshApp:
                             encoding="utf-8",
                             errors="ignore"
                         )
+                        self.update_processed_journal_file(current_journal)
                         file.seek(0, os.SEEK_END)
 
                     line = file.readline()
@@ -4881,8 +6190,15 @@ class EdSpanshApp:
 
                     try:
                         log_entry = json.loads(line)
+
+                        progress_changed = self.process_journal_entry_for_progress(log_entry)
+                        if progress_changed:
+                            self.update_processed_journal_file(current_journal)
+                            self.save_journal_progress_index()
+
                         if log_entry.get("event") == "FSDJump":
                             self.ui_call(self.jump_detected, log_entry, False)
+
                     except json.JSONDecodeError:
                         continue
             finally:
