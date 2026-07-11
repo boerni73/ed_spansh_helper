@@ -3353,6 +3353,30 @@ class EdSpanshApp:
 
         return None
 
+    def get_r2r_body_progress_state_by_name(self, body_name):
+        entry = self.get_r2r_body_progress_by_name(body_name)
+        if not entry:
+            return "open"
+
+        if bool(entry.get("mapped", False)):
+            return "mapped"
+
+        if bool(entry.get("fss_scanned", False)):
+            return "scanned"
+
+        return "open"
+
+    def _dim_color(self, color, factor=0.45):
+        try:
+            r, g, b = color
+            return (
+                int(r * factor),
+                int(g * factor),
+                int(b * factor),
+            )
+        except Exception:
+            return color
+
     def is_r2r_body_scanned_by_name(self, body_name):
         entry = self.get_r2r_body_progress_by_name(body_name)
         if not entry:
@@ -3364,6 +3388,103 @@ class EdSpanshApp:
         if not entry:
             return False
         return bool(entry.get("mapped", False))
+
+    def normalize_progress_name(self, value):
+        return " ".join(str(value or "").strip().lower().split())
+
+    def get_registered_body_entry_by_name(self, body_name):
+        normalized_name = self.normalize_body_name(body_name)
+        if not normalized_name:
+            return None
+
+        for entry in self.progress_index.get("body_registry", {}).values():
+            if self.normalize_body_name(entry.get("body_name", "")) == normalized_name:
+                return entry
+
+        return None
+
+    def get_exobiology_species_progress_by_body_name(self, body_name, species_localised):
+        registry_entry = self.get_registered_body_entry_by_name(body_name)
+        if not registry_entry:
+            return None
+
+        system_address = registry_entry.get("system_address")
+        body_id = registry_entry.get("body_id")
+
+        if system_address is None or body_id is None:
+            return None
+
+        target_species = self.normalize_progress_name(species_localised)
+        if not target_species:
+            return None
+
+        species_status = self.progress_index.get("exobiology", {}).get("species_status", {})
+
+        for entry in species_status.values():
+            if entry.get("system_address") != system_address:
+                continue
+            if entry.get("body") != body_id:
+                continue
+
+            species_localised_value = self.normalize_progress_name(
+                entry.get("species_localised", "")
+            )
+            species_internal_value = self.normalize_progress_name(
+                entry.get("species", "")
+            )
+
+            if target_species == species_localised_value or target_species == species_internal_value:
+                return entry
+
+        return None
+
+    def is_exobiology_species_completed_by_body_name(self, body_name, species_localised):
+        entry = self.get_exobiology_species_progress_by_body_name(
+            body_name,
+            species_localised,
+        )
+        if not entry:
+            return False
+
+        return str(entry.get("status", "")).strip() == "Analyse"
+
+    def get_exobiology_body_progress_state(self, body):
+        if not isinstance(body, dict):
+            return "open"
+
+        body_name = str(body.get("name", "") or "").strip()
+        landmarks = body.get("landmarks", [])
+
+        if not body_name or not isinstance(landmarks, list):
+            return "open"
+
+        valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+        if not valid_landmarks:
+            return "open"
+
+        total_count = 0
+        completed_count = 0
+
+        for landmark in valid_landmarks:
+            subtype = str(landmark.get("subtype", "") or "").strip()
+            if not subtype:
+                continue
+
+            total_count += 1
+
+            if self.is_exobiology_species_completed_by_body_name(body_name, subtype):
+                completed_count += 1
+
+        if total_count == 0:
+            return "open"
+
+        if completed_count >= total_count:
+            return "completed"
+
+        if completed_count > 0:
+            return "partial"
+
+        return "open"
 
     def load_journal_progress_index(self):
         if not os.path.exists(JOURNAL_PROGRESS_FILE):
@@ -3743,6 +3864,7 @@ class EdSpanshApp:
         if not route_entry:
             return {
                 "count": 0,
+                "remaining_count": 0,
                 "scan_total": 0,
                 "mapping_total": 0,
             }
@@ -3753,16 +3875,31 @@ class EdSpanshApp:
 
         valid_bodies = [body for body in bodies if isinstance(body, dict)]
 
+        scan_total = 0
+        mapping_total = 0
+        remaining_count = 0
+
+        for body in valid_bodies:
+            body_name = str(body.get("name", "") or "").strip()
+            body_state = self.get_r2r_body_progress_state_by_name(body_name)
+
+            scan_pending = body_state == "open"
+            mapping_pending = body_state in ("open", "scanned")
+
+            if scan_pending:
+                scan_total += int(body.get("estimated_scan_value", 0) or 0)
+
+            if mapping_pending:
+                mapping_total += int(body.get("estimated_mapping_value", 0) or 0)
+
+            if scan_pending or mapping_pending:
+                remaining_count += 1
+
         return {
             "count": len(valid_bodies),
-            "scan_total": sum(
-                int(body.get("estimated_scan_value", 0) or 0)
-                for body in valid_bodies
-            ),
-            "mapping_total": sum(
-                int(body.get("estimated_mapping_value", 0) or 0)
-                for body in valid_bodies
-            ),
+            "remaining_count": remaining_count,
+            "scan_total": scan_total,
+            "mapping_total": mapping_total,
         }
 
     def _get_primary_landmark_subtype(self, body):
@@ -3818,6 +3955,7 @@ class EdSpanshApp:
             body_subtype = str(body.get("subtype", "") or "")
             body_color = self._get_body_subtype_color(body_subtype)
             distance_ls = int(round(float(body.get("distance_to_arrival", 0) or 0)))
+            body_progress_state = self.get_exobiology_body_progress_state(body)
 
             landmarks = body.get("landmarks", [])
             if not isinstance(landmarks, list):
@@ -3841,6 +3979,8 @@ class EdSpanshApp:
                     "distance_ls": distance_ls,
                     "landmark_value": int(body.get("landmark_value", 0) or 0),
                     "landmark_subtype": "-",
+                    "body_progress_state": body_progress_state,
+                    "landmark_completed": False,
                 })
                 continue
 
@@ -3849,15 +3989,23 @@ class EdSpanshApp:
                 landmark_count = int(landmark.get("count", 0) or 0)
                 landmark_value = int(landmark.get("value", 0) or 0)
 
+                landmark_completed = self.is_exobiology_species_completed_by_body_name(
+                    body_name,
+                    landmark_subtype,
+                )
+
+                display_subtype = landmark_subtype
                 if landmark_count > 1:
-                    landmark_subtype = f"{landmark_subtype} x{landmark_count}"
+                    display_subtype = f"{landmark_subtype} x{landmark_count}"
 
                 display_rows.append({
                     "display_body_name": display_body_name if idx == 0 else "",
                     "body_color": body_color,
                     "distance_ls": distance_ls if idx == 0 else None,
                     "landmark_value": landmark_value,
-                    "landmark_subtype": landmark_subtype,
+                    "landmark_subtype": display_subtype,
+                    "body_progress_state": body_progress_state,
+                    "landmark_completed": landmark_completed,
                 })
 
         if max_rows is None:
@@ -3870,6 +4018,7 @@ class EdSpanshApp:
         if not route_entry:
             return {
                 "count": 0,
+                "remaining_count": 0,
                 "landmark_total": 0,
             }
 
@@ -3885,25 +4034,46 @@ class EdSpanshApp:
             )
         ]
 
+        remaining_count = 0
         landmark_total = 0
 
         for body in valid_bodies:
+            body_name = str(body.get("name", "") or "").strip()
             landmarks = body.get("landmarks", [])
-            if isinstance(landmarks, list):
-                valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
-            else:
-                valid_landmarks = []
+
+            if not isinstance(landmarks, list):
+                landmarks = []
+
+            valid_landmarks = [lm for lm in landmarks if isinstance(lm, dict)]
+
+            body_has_remaining = False
 
             if valid_landmarks:
-                landmark_total += sum(
-                    int(lm.get("value", 0) or 0)
-                    for lm in valid_landmarks
-                )
+                for landmark in valid_landmarks:
+                    landmark_subtype = str(landmark.get("subtype", "") or "").strip()
+                    landmark_value = int(landmark.get("value", 0) or 0)
+
+                    if not landmark_subtype:
+                        continue
+
+                    if not self.is_exobiology_species_completed_by_body_name(
+                        body_name,
+                        landmark_subtype,
+                    ):
+                        landmark_total += landmark_value
+                        body_has_remaining = True
             else:
-                landmark_total += int(body.get("landmark_value", 0) or 0)
+                fallback_value = int(body.get("landmark_value", 0) or 0)
+                if fallback_value > 0:
+                    landmark_total += fallback_value
+                    body_has_remaining = True
+
+            if body_has_remaining:
+                remaining_count += 1
 
         return {
             "count": len(valid_bodies),
+            "remaining_count": remaining_count,
             "landmark_total": landmark_total,
         }
 
@@ -4710,7 +4880,17 @@ class EdSpanshApp:
             scan_value = int(body.get("estimated_scan_value", 0) or 0)
             mapping_value = int(body.get("estimated_mapping_value", 0) or 0)
 
-            body_color = self._get_body_subtype_color(subtype)
+            body_base_color = self._get_body_subtype_color(subtype)
+            body_state = self.get_r2r_body_progress_state_by_name(body_name)
+
+            body_done = body_state == "mapped"
+            scan_done = body_state in ("scanned", "mapped")
+            mapping_done = body_state == "mapped"
+
+            body_color = self._dim_color(body_base_color) if body_done else body_base_color
+            dist_color = colors["table_text"]
+            scan_color = self._dim_color(colors["table_text"]) if scan_done else colors["table_text"]
+            mapping_color = self._dim_color(colors["ed_orange"]) if mapping_done else colors["ed_orange"]
 
             draw.text(
                 (positions["body_x"], row_y),
@@ -4729,13 +4909,13 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["scan_x"] - scan_width, row_y),
                     scan_text,
-                    fill=colors["ed_orange"],
+                    fill=scan_color,
                     font=fonts["table_row"]
                 )
 
@@ -4746,13 +4926,13 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["map_x"] - map_width, row_y),
                     map_text,
-                    fill=colors["ed_orange"],
+                    fill=mapping_color,
                     font=fonts["table_row"]
                 )
 
@@ -4765,23 +4945,23 @@ class EdSpanshApp:
                 draw.text(
                     (positions["dist_x"] - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["scan_x"] - scan_width, row_y),
                     scan_text,
-                    fill=colors["table_text"],
+                    fill=scan_color,
                     font=fonts["table_row"]
                 )
                 draw.text(
                     (positions["map_x"] - map_width, row_y),
                     map_text,
-                    fill=colors["ed_orange"],
+                    fill=mapping_color,
                     font=fonts["table_row"]
                 )
 
-        body_count = int(totals.get("count", 0) or 0)
+        body_count = int(totals.get("remaining_count", 0) or 0)
         scan_total = int(totals.get("scan_total", 0) or 0)
         mapping_total = int(totals.get("mapping_total", 0) or 0)
 
@@ -4861,10 +5041,25 @@ class EdSpanshApp:
             row_y = self._get_table_row_y(table_top, i)
 
             display_body_name = str(body.get("display_body_name", "") or "")
-            body_color = body.get("body_color", colors["table_text"])
+            body_base_color = body.get("body_color", colors["table_text"])
             distance_ls = body.get("distance_ls")
             landmark_value = body.get("landmark_value")
             landmark_subtype = str(body.get("landmark_subtype", "-") or "-")
+            body_progress_state = str(body.get("body_progress_state", "open") or "open")
+            landmark_completed = bool(body.get("landmark_completed", False))
+
+            body_done = body_progress_state == "completed"
+
+            body_color = self._dim_color(body_base_color) if body_done else body_base_color
+            dist_color = self._dim_color(colors["table_text"]) if body_done else colors["table_text"]
+            value_color = (
+                self._dim_color(colors["ed_orange"])
+                if landmark_completed else colors["ed_orange"]
+            )
+            subtype_color = (
+                self._dim_color(colors["table_text"])
+                if landmark_completed else colors["table_text"]
+            )
 
             if display_body_name:
                 body_font = self._fit_font(
@@ -4888,7 +5083,7 @@ class EdSpanshApp:
                 draw.text(
                     (self.EXO_COL_DIST_X - dist_width, row_y),
                     dist_text,
-                    fill=colors["table_text"],
+                    fill=dist_color,
                     font=fonts["table_row"]
                 )
 
@@ -4898,7 +5093,7 @@ class EdSpanshApp:
                 draw.text(
                     (self.EXO_COL_VALUE_X - value_width, row_y),
                     value_text,
-                    fill=colors["ed_orange"],
+                    fill=value_color,
                     font=fonts["table_row"]
                 )
 
@@ -4914,11 +5109,11 @@ class EdSpanshApp:
             draw.text(
                 (self.EXO_COL_SUBTYPE_X, row_y + 4),
                 landmark_subtype,
-                fill=colors["table_text"],
+                fill=subtype_color,
                 font=subtype_font
             )
 
-        body_count = int(totals.get("count", 0) or 0)
+        body_count = int(totals.get("remaining_count", 0) or 0)
         landmark_total = int(totals.get("landmark_total", 0) or 0)
 
         summary_config = self._get_exobiology_summary_config(
