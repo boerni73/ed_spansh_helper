@@ -186,8 +186,8 @@ class EdSpanshApp:
         self.root.title(
             f"Elite Dangerous - Spansh VR Navigator v{__version__}{debug_suffix}"
         )
-        self.root.geometry("1500x1220" if self.debug_mode else "1500x950")
-        self.root.minsize(1200, 1370 if self.debug_mode else 1100)
+        self.root.geometry("1500x1280" if self.debug_mode else "1500x950")
+        self.root.minsize(1200, 1390 if self.debug_mode else 1100)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.my_route = []
@@ -880,26 +880,6 @@ class EdSpanshApp:
 
         self.route_table.bind("<Button-3>", self.show_route_table_context_menu)
 
-        # Cockpit navigation display
-        self.dash_frame = tk.LabelFrame(
-            self.left_frame,
-            text=" Cockpit Navigation Display ",
-            font=("Arial", 10, "bold"),
-            padx=10, pady=10,
-        )
-        self.dash_frame.pack(fill="both", expand=False, padx=10, pady=5)
-
-        self.dashboard_image_label = tk.Label(
-            self.dash_frame,
-            text="Waiting for navigation image...",
-            font=("Consolas", 12, "bold"),
-            anchor="center",
-            justify="center",
-        )
-        self.dashboard_image_label.pack(fill="both", expand=True)
-
-        self.dashboard_photo = None
-
         # Debug: simulate jump / scan / mapping / exobiology
         if self.debug_mode:
             self.debug_frame = tk.LabelFrame(
@@ -941,9 +921,17 @@ class EdSpanshApp:
             self.debug_row_bottom = tk.Frame(self.debug_frame)
             self.debug_row_bottom.pack(fill="x", pady=(8, 0))
 
+            self.debug_previous_btn = tk.Button(
+                self.debug_row_bottom,
+                text="◀ Previous Waypoint",
+                command=self.simulate_previous_waypoint,
+                padx=12,
+            )
+            self.debug_previous_btn.pack(side="left", padx=(0, 8))
+
             self.debug_next_btn = tk.Button(
                 self.debug_row_bottom,
-                text="Simulate Next Waypoint",
+                text="Next Waypoint ▶",
                 command=self.simulate_next_waypoint,
                 padx=12,
             )
@@ -951,11 +939,27 @@ class EdSpanshApp:
 
             self.debug_auto_btn = tk.Button(
                 self.debug_row_bottom,
-                text="Auto Simulate Route",
+                text="⟳ Auto Route",
                 command=self.toggle_auto_simulate_route,
                 padx=12,
             )
             self.debug_auto_btn.pack(side="left")
+
+            self.debug_clear_progress_btn = tk.Button(
+                self.debug_row_bottom,
+                text="⌫ Clear Sim",
+                command=self.clear_debug_simulated_progress,
+                padx=12,
+            )
+            self.debug_clear_progress_btn.pack(side="left", padx=(8, 0))
+
+            self.debug_rebuild_progress_btn = tk.Button(
+                self.debug_row_bottom,
+                text="↻ Rebuild Index",
+                command=self.rebuild_journal_progress_index,
+                padx=12,
+            )
+            self.debug_rebuild_progress_btn.pack(side="left", padx=(8, 0))
 
             self.debug_row_body = tk.Frame(self.debug_frame)
             self.debug_row_body.pack(fill="x", pady=(10, 0))
@@ -1054,13 +1058,26 @@ class EdSpanshApp:
                 "<<ComboboxSelected>>",
                 self.refresh_debug_species_dropdown
             )
-            self.debug_clear_progress_btn = tk.Button(
-                self.debug_row_bottom,
-                text="Clear Simulated Progress",
-                command=self.clear_debug_simulated_progress,
-                padx=12,
-            )
-            self.debug_clear_progress_btn.pack(side="left", padx=(8, 0))
+
+        # Cockpit navigation display
+        self.dash_frame = tk.LabelFrame(
+            self.left_frame,
+            text=" Cockpit Navigation Display ",
+            font=("Arial", 10, "bold"),
+            padx=10, pady=10,
+        )
+        self.dash_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.dashboard_image_label = tk.Label(
+            self.dash_frame,
+            text="Waiting for navigation image...",
+            font=("Consolas", 12, "bold"),
+            anchor="center",
+            justify="center",
+        )
+        self.dashboard_image_label.pack(fill="both", expand=True)
+
+        self.dashboard_photo = None
 
         # Log output
         self.output_label = tk.Label(
@@ -1577,6 +1594,11 @@ class EdSpanshApp:
                 activebackground=t["btn_pause_bg"], activeforeground=t["btn_fg"],
                 relief="flat", bd=0,
             )
+            self.debug_previous_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
             self.debug_next_btn.config(
                 bg=t["btn_pause_bg"], fg=t["btn_fg"],
                 activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
@@ -1615,6 +1637,11 @@ class EdSpanshApp:
             self.debug_clear_progress_btn.config(
                 bg=t["btn_stop_bg"], fg=t["btn_fg"],
                 activebackground="#aa3a00", activeforeground=t["btn_fg"],
+                relief="flat", bd=0,
+            )
+            self.debug_rebuild_progress_btn.config(
+                bg=t["btn_pause_bg"], fg=t["btn_fg"],
+                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
                 relief="flat", bd=0,
             )
 
@@ -1957,6 +1984,36 @@ class EdSpanshApp:
 
         return self.debug_waypoint_entries[selected_index]
 
+    def get_previous_debug_waypoint_entry(self):
+        if not self.debug_mode:
+            return None
+
+        if not self.my_route:
+            return None
+
+        try:
+            previous_index = int(self.route_index) - 2
+        except Exception:
+            previous_index = -1
+
+        if previous_index < 0:
+            return None
+
+        if previous_index >= len(self.my_route):
+            return None
+
+        route_entry = self.get_route_entry_by_index(previous_index)
+        if not route_entry:
+            return None
+
+        label = f"{previous_index + 1} | {str(route_entry.get('name', '')).strip()}"
+
+        return {
+            "label": label,
+            "index": previous_index,
+            "entry": route_entry,
+        }
+
     def get_next_debug_waypoint_entry(self):
         if not self.debug_mode:
             return None
@@ -2083,6 +2140,29 @@ class EdSpanshApp:
             source_label="Simulate Selected",
         )
 
+    def simulate_previous_waypoint(self):
+        if not self.my_route:
+            if not self.read_route_file():
+                messagebox.showwarning(
+                    "No Route Loaded",
+                    "Please load a valid route first."
+                )
+                return
+
+        previous_item = self.get_previous_debug_waypoint_entry()
+        if not previous_item:
+            messagebox.showinfo(
+                "No Previous Waypoint",
+                "There is no previous waypoint left to simulate."
+            )
+            return
+
+        self.simulate_jump_to_route_entry(
+            route_index=int(previous_item.get("index", 0)),
+            route_entry=previous_item.get("entry", {}),
+            source_label="Simulate Previous",
+        )
+
     def simulate_next_waypoint(self):
         if not self.my_route:
             if not self.read_route_file():
@@ -2152,6 +2232,48 @@ class EdSpanshApp:
 
         if log_message:
             self.log("[DEBUG] Automatic route simulation stopped.")
+
+    def clear_debug_simulated_progress(self):
+        self.debug_simulated_progress_index = None
+        self.log("[DEBUG] Cleared simulated progress overlay.")
+
+        if self.debug_mode:
+            self.refresh_debug_waypoint_dropdown()
+            self.refresh_debug_body_dropdown()
+
+        self.refresh_current_route_progress_visuals()
+
+    def rebuild_journal_progress_index(self):
+        if self.monitoring_active:
+            messagebox.showwarning(
+                "Monitoring Active",
+                "Please stop monitoring before rebuilding the progress index."
+            )
+            return
+
+        confirm = messagebox.askyesno(
+            "Rebuild Progress Index",
+            "This will rebuild the journal progress index from the journal files.\n\n"
+            "The simulated debug overlay will be cleared.\n\n"
+            "Do you want to continue?"
+        )
+        if not confirm:
+            return
+
+        self.debug_simulated_progress_index = None
+        self.progress_index = self.make_empty_journal_progress_index()
+        self.progress_index_dirty = False
+
+        self.log("Rebuilding journal progress index from journal files...")
+        self.sync_journal_progress_from_existing_logs()
+        self.save_journal_progress_index()
+        self.log("Journal progress index rebuild completed.")
+
+        if self.debug_mode:
+            self.refresh_debug_waypoint_dropdown()
+            self.refresh_debug_body_dropdown()
+
+        self.refresh_current_route_progress_visuals()
 
     def _run_auto_simulation_tick(self):
         self.debug_auto_simulation_after_id = None
@@ -3758,12 +3880,6 @@ class EdSpanshApp:
             self.progress_index_dirty = original_dirty
 
         return changed, updated_index, updated_dirty
-
-    def clear_debug_simulated_progress(self):
-        self.debug_simulated_progress_index = None
-        self.log("[DEBUG] Cleared simulated progress overlay.")
-        self.refresh_current_route_progress_visuals()
-        self.refresh_debug_body_dropdown()
 
     def make_empty_journal_progress_index(self):
         return {
