@@ -953,14 +953,6 @@ class EdSpanshApp:
             )
             self.debug_clear_progress_btn.pack(side="left", padx=(8, 0))
 
-            self.debug_rebuild_progress_btn = tk.Button(
-                self.debug_row_bottom,
-                text="↻ Rebuild Index",
-                command=self.rebuild_journal_progress_index,
-                padx=12,
-            )
-            self.debug_rebuild_progress_btn.pack(side="left", padx=(8, 0))
-
             self.debug_row_body = tk.Frame(self.debug_frame)
             self.debug_row_body.pack(fill="x", pady=(10, 0))
 
@@ -1639,11 +1631,6 @@ class EdSpanshApp:
                 activebackground="#aa3a00", activeforeground=t["btn_fg"],
                 relief="flat", bd=0,
             )
-            self.debug_rebuild_progress_btn.config(
-                bg=t["btn_pause_bg"], fg=t["btn_fg"],
-                activebackground=t["btn_start_bg"], activeforeground=t["btn_fg"],
-                relief="flat", bd=0,
-            )
 
     def _update_transport_btn_states(self):
         self.start_btn.config(
@@ -2251,10 +2238,13 @@ class EdSpanshApp:
             )
             return
 
+        if self.debug_mode and self.debug_auto_simulation_active:
+            self.stop_auto_simulate_route(log_message=False)
+
         confirm = messagebox.askyesno(
             "Rebuild Progress Index",
             "This will rebuild the journal progress index from the journal files.\n\n"
-            "The simulated debug overlay will be cleared.\n\n"
+            "Any simulated debug overlay will be cleared.\n\n"
             "Do you want to continue?"
         )
         if not confirm:
@@ -2268,6 +2258,49 @@ class EdSpanshApp:
         self.sync_journal_progress_from_existing_logs()
         self.save_journal_progress_index()
         self.log("Journal progress index rebuild completed.")
+
+        if self.debug_mode:
+            self.refresh_debug_waypoint_dropdown()
+            self.refresh_debug_body_dropdown()
+
+        self.refresh_current_route_progress_visuals()
+
+    def delete_journal_progress_index(self):
+        if self.monitoring_active:
+            messagebox.showwarning(
+                "Monitoring Active",
+                "Please stop monitoring before deleting the progress index."
+            )
+            return
+
+        if self.debug_mode and self.debug_auto_simulation_active:
+            self.stop_auto_simulate_route(log_message=False)
+
+        confirm = messagebox.askyesno(
+            "Delete Progress Index",
+            "This will permanently delete the saved journal progress index file.\n\n"
+            "Any simulated debug overlay will be cleared.\n\n"
+            "Do you want to continue?"
+        )
+        if not confirm:
+            return
+
+        self.debug_simulated_progress_index = None
+        self.progress_index = self.make_empty_journal_progress_index()
+        self.progress_index_dirty = False
+
+        try:
+            if os.path.exists(JOURNAL_PROGRESS_FILE):
+                os.remove(JOURNAL_PROGRESS_FILE)
+                self.log(f"Deleted journal progress index: {JOURNAL_PROGRESS_FILE}")
+            else:
+                self.log("Journal progress index file did not exist.")
+        except Exception as e:
+            messagebox.showerror(
+                "Delete Progress Index Error",
+                f"Could not delete the progress index file:\n{e}"
+            )
+            return
 
         if self.debug_mode:
             self.refresh_debug_waypoint_dropdown()
@@ -3101,8 +3134,8 @@ class EdSpanshApp:
     def open_settings_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("Settings")
-        dialog.geometry("760x620")
-        dialog.minsize(680, 560)
+        dialog.geometry("760x720")
+        dialog.minsize(680, 650)
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.config(bg="#000000")
@@ -3243,6 +3276,91 @@ class EdSpanshApp:
             row=5, column=0, columnspan=2,
             sticky="w", padx=12, pady=(0, 8)
         )
+
+        tk.Frame(tab_files, bg="#ff7300", height=1).grid(
+            row=6, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 10)
+        )
+
+        tk.Label(
+            tab_files,
+            text="Journal Progress Index:",
+            bg="#000000", fg="#ff7300",
+            font=("Arial", 10, "bold"), anchor="w",
+        ).grid(row=7, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 2))
+
+        progress_index_var = tk.StringVar(value=JOURNAL_PROGRESS_FILE)
+
+        progress_path_row = tk.Frame(tab_files, bg="#000000")
+        progress_path_row.grid(
+            row=8, column=0, columnspan=2,
+            sticky="ew", padx=12, pady=(0, 8)
+        )
+        progress_path_row.columnconfigure(0, weight=1)
+
+        progress_index_entry = tk.Entry(
+            progress_path_row,
+            textvariable=progress_index_var,
+            state="readonly",
+            readonlybackground="#1a1a1a",
+            bg="#1a1a1a",
+            fg="#ff7300",
+            insertbackground="#ff7300",
+            font=("Consolas", 9),
+            relief="flat",
+            bd=4,
+        )
+        progress_index_entry.grid(
+            row=0, column=0,
+            sticky="ew", padx=(0, 6), ipady=4
+        )
+
+        def open_progress_folder():
+            try:
+                folder_path = os.path.dirname(JOURNAL_PROGRESS_FILE) or os.path.expanduser("~")
+                os.makedirs(folder_path, exist_ok=True)
+                os.startfile(folder_path)
+            except Exception as e:
+                messagebox.showerror(
+                    "Open Folder Error",
+                    f"Could not open progress folder:\n{e}",
+                    parent=dialog,
+                )
+
+        tk.Button(
+            progress_path_row,
+            text="📂 Open Folder",
+            command=open_progress_folder,
+            bg="#000000", fg="#ff7300",
+            activebackground="#1a1a1a", activeforeground="#ffaa44",
+            relief="flat", bd=2, padx=10, pady=3,
+            font=("Arial", 9, "bold"),
+        ).grid(row=0, column=1, sticky="ew")
+
+        progress_button_row = tk.Frame(tab_files, bg="#000000")
+        progress_button_row.grid(
+            row=9, column=0, columnspan=2,
+            sticky="w", padx=12, pady=(0, 10)
+        )
+
+        tk.Button(
+            progress_button_row,
+            text="↻ Rebuild Index",
+            command=self.rebuild_journal_progress_index,
+            bg="#000000", fg="#ffd700",
+            activebackground="#1a1a1a", activeforeground="#ffe566",
+            relief="flat", bd=2, padx=12, pady=4,
+            font=("Arial", 9, "bold"),
+        ).pack(side="left", padx=(0, 8))
+
+        tk.Button(
+            progress_button_row,
+            text="✕ Delete Index",
+            command=self.delete_journal_progress_index,
+            bg="#000000", fg=BTN_FG_STOP,
+            activebackground="#1a1a1a", activeforeground=BTN_FG_STOP,
+            relief="flat", bd=2, padx=12, pady=4,
+            font=("Arial", 9, "bold"),
+        ).pack(side="left")
 
         # ==============================================================
         # Tab 2: VR Runtime
