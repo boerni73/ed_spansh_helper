@@ -19,6 +19,7 @@ import shutil
 import math
 import copy
 import webbrowser
+import subprocess
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, ttk
 from typing import Any, cast
@@ -3316,9 +3317,15 @@ class EdSpanshApp:
 
         def open_progress_folder():
             try:
-                folder_path = os.path.dirname(JOURNAL_PROGRESS_FILE) or os.path.expanduser("~")
+                file_path = os.path.normpath(JOURNAL_PROGRESS_FILE)
+                folder_path = os.path.dirname(file_path) or os.path.expanduser("~")
                 os.makedirs(folder_path, exist_ok=True)
-                os.startfile(folder_path)
+
+                if os.path.exists(file_path):
+                    subprocess.Popen(f'explorer /select,"{file_path}"')
+                else:
+                    os.startfile(folder_path)
+
             except Exception as e:
                 messagebox.showerror(
                     "Open Folder Error",
